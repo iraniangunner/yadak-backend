@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -59,9 +60,13 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        
+
         if (! Auth::attempt($request->only('email', 'password'))) {
             return response()->json(['message' => 'ایمیل یا رمز عبور اشتباه است.'], 401);
         }
+
+      
 
         /** @var User $user */
         $user = User::where('email', $request->email)->first();
@@ -69,6 +74,11 @@ class AuthController extends Controller
         if (! $user->is_active) {
             return response()->json(['message' => 'حساب کاربری شما غیرفعال شده است.'], 403);
         }
+
+        Log::info('Passport Config', [
+            'client_id' => config('services.passport.password_client_id'),
+            'client_secret' => config('services.passport.password_client_secret'),
+        ]);
 
         $tokenResponse = Http::asForm()->post(url('/oauth/token'), [
             'grant_type' => 'password',
@@ -79,6 +89,11 @@ class AuthController extends Controller
             'scope' => '',
         ]);
 
+
+        Log::info('Passport Response', [
+            'status' => $tokenResponse->status(),
+            'body' => $tokenResponse->body(),
+        ]);
         if (! $tokenResponse->successful()) {
             return response()->json(['message' => 'خطا در دریافت توکن. تنظیمات Passport Client رو چک کن.'], 500);
         }
@@ -99,6 +114,8 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+       
+
         $tokenResponse = Http::asForm()->post(url('/oauth/token'), [
             'grant_type' => 'refresh_token',
             'refresh_token' => $request->refresh_token,
@@ -106,6 +123,8 @@ class AuthController extends Controller
             'client_secret' => config('services.passport.password_client_secret'),
             'scope' => '',
         ]);
+
+       
 
         if (! $tokenResponse->successful()) {
             return response()->json(['message' => 'refresh token نامعتبر یا منقضی‌شده است.'], 401);
@@ -169,7 +188,7 @@ class AuthController extends Controller
         ]);
 
         try {
-            app(SmsService::class)->sendByTemplate($mobile, 'yadak-otp', ['token' => $code]);
+            app(SmsService::class)->sendByTemplate($mobile, 'yadak-otp', [$code]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('خطا در ارسال پیامک OTP', ['error' => $e->getMessage()]);
         }
