@@ -50,6 +50,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middle
 Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/me', [AuthController::class, 'updateProfile']);
 });
 
 /*

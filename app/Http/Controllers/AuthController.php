@@ -60,13 +60,13 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        
+
 
         if (! Auth::attempt($request->only('email', 'password'))) {
             return response()->json(['message' => 'ایمیل یا رمز عبور اشتباه است.'], 401);
         }
 
-      
+
 
         /** @var User $user */
         $user = User::where('email', $request->email)->first();
@@ -114,7 +114,7 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-       
+
 
         $tokenResponse = Http::asForm()->post(url('/oauth/token'), [
             'grant_type' => 'refresh_token',
@@ -124,7 +124,7 @@ class AuthController extends Controller
             'scope' => '',
         ]);
 
-       
+
 
         if (! $tokenResponse->successful()) {
             return response()->json(['message' => 'refresh token نامعتبر یا منقضی‌شده است.'], 401);
@@ -351,5 +351,30 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json($request->user());
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'email' => [
+                'sometimes',
+                'nullable',
+                'email',
+                'max:255',
+                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id),
+            ],
+            'city' => 'sometimes|nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user->update($validator->validated());
+
+        return response()->json(['user' => $user->fresh()]);
     }
 }
