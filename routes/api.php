@@ -1,0 +1,317 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StaffController;
+use App\Http\Controllers\BrandController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\VehicleController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\CustomerVehicleController;
+use App\Http\Controllers\ProductStockSubscriptionController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\AdminOrderController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\DiscountController;
+use App\Http\Controllers\ProductPriceTierController;
+use App\Http\Controllers\CouponController;
+use App\Http\Controllers\ReferralCodeController;
+use App\Http\Controllers\ReferralCommissionController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\OrderReturnController;
+use App\Http\Controllers\AdminOrderReturnController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SalesAlertController;
+use App\Http\Controllers\InventoryAlertController;
+use App\Http\Controllers\MarketingCampaignController;
+use App\Http\Controllers\ArticleController;
+use App\Http\Controllers\BannerController;
+use App\Http\Controllers\AddressController;
+use App\Http\Controllers\ShippingRateController;
+use App\Http\Controllers\ShippingEstimateController;
+use App\Http\Controllers\ShippingOptionsController;
+use App\Http\Controllers\AccountingController;
+
+/*
+|--------------------------------------------------------------------------
+| Auth (عمومی)
+|--------------------------------------------------------------------------
+*/
+
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/refresh', [AuthController::class, 'refresh'])->middleware('throttle:10,1');
+Route::post('/send-otp', [AuthController::class, 'sendOtp'])->middleware('throttle:3,10');
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:10,10');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,10');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,10');
+
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| مدیریت staff (فقط ادمین)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/staff', [StaffController::class, 'index']);
+    Route::post('/staff', [StaffController::class, 'store']);
+    Route::put('/staff/{user}', [StaffController::class, 'update']);
+    Route::delete('/staff/{user}', [StaffController::class, 'destroy']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| محصول / برند / دسته‌بندی / خودرو - عمومی (بدون نیاز به لاگین)
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/brands', [BrandController::class, 'index']);
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/vehicles', [VehicleController::class, 'index']);
+
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{product}', [ProductController::class, 'show']);
+
+// ثبت علاقه‌مندی موجودی: هم مهمان هم کاربر لاگین‌شده می‌تونن استفاده کنن.
+// چون این route پشت auth:api نیست، $request->user() همیشه null برمی‌گرده،
+// یعنی فعلاً mobile همیشه الزامیه (حتی برای کاربر لاگین‌شده).
+Route::post('/products/{product}/stock-subscribe', [ProductStockSubscriptionController::class, 'store'])
+    ->middleware('throttle:5,10');
+
+
+// عمومی - محاسبه‌ی قیمت بر اساس تعداد (برای سبد خرید فرانت)
+Route::get('/products/{product}/price-for-quantity', [ProductController::class, 'priceForQuantity']);
+
+
+
+
+
+Route::get('/articles', [ArticleController::class, 'index']);
+Route::get('/articles/{slug}', [ArticleController::class, 'show']);
+Route::get('/banners', [BannerController::class, 'index']);
+
+/*
+|--------------------------------------------------------------------------
+| خودروهای مشتری (کاربر لاگین‌شده)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::get('/my-vehicles', [CustomerVehicleController::class, 'index']);
+    Route::post('/my-vehicles', [CustomerVehicleController::class, 'store']);
+    Route::delete('/my-vehicles/{vehicle}', [CustomerVehicleController::class, 'destroy']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| مدیریت محصول/برند/دسته/خودرو (ادمین و انبار)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::post('/admin/brands', [BrandController::class, 'store']);
+    Route::put('/admin/brands/{brand}', [BrandController::class, 'update']);
+    Route::delete('/admin/brands/{brand}', [BrandController::class, 'destroy']);
+
+    Route::post('/admin/categories', [CategoryController::class, 'store']);
+    Route::put('/admin/categories/{category}', [CategoryController::class, 'update']);
+    Route::delete('/admin/categories/{category}', [CategoryController::class, 'destroy']);
+
+    Route::post('/admin/vehicles', [VehicleController::class, 'store']);
+    Route::put('/admin/vehicles/{vehicle}', [VehicleController::class, 'update']);
+    Route::delete('/admin/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
+
+    Route::post('/admin/products', [ProductController::class, 'store']);
+    Route::put('/admin/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/admin/products/{product}', [ProductController::class, 'destroy']);
+    Route::delete('/admin/products/{product}/images/{image}', [ProductController::class, 'destroyImage']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| سفارش‌های مشتری (کاربر لاگین‌شده)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::post('/orders', [OrderController::class, 'store']);
+    Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm']);
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
+
+    // ساخت لینک پرداخت زمان‌دار (زرین‌پال) برای سفارشی که تایید شده
+    Route::post('/orders/{order}/pay', [PaymentController::class, 'initiate']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| مدیریت سفارش‌ها (ادمین و انبار)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/orders', [AdminOrderController::class, 'index']);
+    Route::get('/admin/orders/{order}', [AdminOrderController::class, 'show']);
+    Route::post('/admin/orders/{order}/approve', [AdminOrderController::class, 'approve']);
+    Route::put('/admin/orders/{order}/items', [AdminOrderController::class, 'updateItems']);
+    Route::post('/admin/orders/{order}/cancel', [AdminOrderController::class, 'cancel']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| بازگشت از درگاه پرداخت (عمومی - زرین‌پال مستقیم مرورگر کاربر رو می‌فرسته)
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
+
+
+
+/* تخفیف ها */
+
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/discounts', [DiscountController::class, 'index']);
+    Route::post('/admin/discounts', [DiscountController::class, 'store']);
+    Route::put('/admin/discounts/{discount}', [DiscountController::class, 'update']);
+    Route::delete('/admin/discounts/{discount}', [DiscountController::class, 'destroy']);
+});
+
+
+// مدیریت قیمت پلکانی (ادمین و انبار)
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::post('/admin/products/{product}/price-tiers', [ProductPriceTierController::class, 'store']);
+    Route::put('/admin/products/{product}/price-tiers/{tier}', [ProductPriceTierController::class, 'update']);
+    Route::delete('/admin/products/{product}/price-tiers/{tier}', [ProductPriceTierController::class, 'destroy']);
+});
+
+
+// کد تخفیف
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/coupons', [CouponController::class, 'index']);
+    Route::post('/admin/coupons', [CouponController::class, 'store']);
+    Route::put('/admin/coupons/{coupon}', [CouponController::class, 'update']);
+    Route::delete('/admin/coupons/{coupon}', [CouponController::class, 'destroy']);
+});
+
+
+// کد معرف
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/referral-codes', [ReferralCodeController::class, 'index']);
+    Route::post('/admin/referral-codes', [ReferralCodeController::class, 'store']);
+    Route::put('/admin/referral-codes/{referralCode}', [ReferralCodeController::class, 'update']);
+    Route::delete('/admin/referral-codes/{referralCode}', [ReferralCodeController::class, 'destroy']);
+
+    Route::get('/admin/referral-commissions', [ReferralCommissionController::class, 'index']);
+    Route::post('/admin/referral-commissions/{commission}/mark-paid', [ReferralCommissionController::class, 'markPaid']);
+});
+
+
+
+// لاگ تغییرات
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/activity-logs', [ActivityLogController::class, 'index']);
+});
+
+
+
+// ---------- مرجوعی (کاربر لاگین‌شده) ----------
+
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::get('/returns', [OrderReturnController::class, 'index']);
+    Route::post('/orders/{order}/returns', [OrderReturnController::class, 'store']);
+});
+
+// ---------- مدیریت مرجوعی (ادمین و انبار) ----------
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/returns', [AdminOrderReturnController::class, 'index']);
+    Route::post('/admin/returns/{return}/approve', [AdminOrderReturnController::class, 'approve']);
+    Route::post('/admin/returns/{return}/reject', [AdminOrderReturnController::class, 'reject']);
+    Route::post('/admin/returns/{return}/mark-refunded', [AdminOrderReturnController::class, 'markRefunded']);
+});
+
+// ---------- گزارش‌گیری فروش (فقط ادمین) ----------
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/reports/product-sales', [ReportController::class, 'productSales']);
+    Route::get('/admin/reports/customer-sales', [ReportController::class, 'customerSales']);
+    Route::get('/admin/reports/city-sales', [ReportController::class, 'citySales']);
+    Route::get('/admin/reports/returns', [ReportController::class, 'returns']);
+});
+
+
+// آلارم های کمبود کالا و ...
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/sales-alerts', [SalesAlertController::class, 'index']);
+    Route::get('/admin/inventory-alerts', [InventoryAlertController::class, 'index']);
+});
+
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/marketing/campaigns', [MarketingCampaignController::class, 'index']);
+    Route::post('/admin/marketing/preview', [MarketingCampaignController::class, 'preview']);
+    Route::post('/admin/marketing/send', [MarketingCampaignController::class, 'send'])
+        ->middleware('throttle:5,10'); // جلوگیری از ارسال تصادفی/تکراری زیاد
+});
+
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/articles', [ArticleController::class, 'adminIndex']);
+    Route::post('/admin/articles', [ArticleController::class, 'store']);
+    Route::put('/admin/articles/{article}', [ArticleController::class, 'update']);
+    Route::delete('/admin/articles/{article}', [ArticleController::class, 'destroy']);
+
+    Route::post('/admin/banners', [BannerController::class, 'store']);
+    Route::put('/admin/banners/{banner}', [BannerController::class, 'update']);
+    Route::delete('/admin/banners/{banner}', [BannerController::class, 'destroy']);
+});
+
+
+
+
+
+// ---------- آدرس‌های مشتری (کاربر لاگین‌شده) ----------
+
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::put('/addresses/{address}', [AddressController::class, 'update']);
+    Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
+});
+
+// ---------- تخمین هزینه‌ی ارسال (عمومی، قبل از ثبت سفارش) ----------
+
+Route::post('/shipping/estimate', [ShippingEstimateController::class, 'estimate']);
+
+// ---------- مدیریت نرخ‌های ارسال (فقط ادمین) ----------
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/shipping-rates', [ShippingRateController::class, 'index']);
+    Route::post('/admin/shipping-rates', [ShippingRateController::class, 'store']);
+    Route::put('/admin/shipping-rates/{rate}', [ShippingRateController::class, 'update']);
+    Route::delete('/admin/shipping-rates/{rate}', [ShippingRateController::class, 'destroy']);
+});
+
+
+// عمومی - لیست گزینه‌های حمل قبل از ثبت سفارش
+Route::post('/shipping/options', [ShippingOptionsController::class, 'index']);
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::post('/admin/orders/{order}/issue-invoice', [AccountingController::class, 'issueInvoice']);
+});
