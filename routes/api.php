@@ -32,6 +32,7 @@ use App\Http\Controllers\ShippingRateController;
 use App\Http\Controllers\ShippingEstimateController;
 use App\Http\Controllers\ShippingOptionsController;
 use App\Http\Controllers\AccountingController;
+use App\Http\Controllers\AdminUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -315,4 +316,9 @@ Route::post('/shipping/options', [ShippingOptionsController::class, 'index']);
 
 Route::middleware(['auth:api', 'role:admin'])->group(function () {
     Route::post('/admin/orders/{order}/issue-invoice', [AccountingController::class, 'issueInvoice']);
+});
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/users/search', [AdminUserController::class, 'search']);
 });
