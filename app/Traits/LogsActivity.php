@@ -52,11 +52,23 @@ trait LogsActivity
                 return;
             }
 
-            $before = collect($model->getOriginal())->only(array_keys($changes))->all();
+            // ⚠️ برخلاف نسخه‌ی قبلی (که فقط همون فیلدهای تغییرکرده رو
+            // ذخیره می‌کرد)، این‌جا کل رکورد (قبل و بعد) رو کامل ذخیره
+            // می‌کنیم - تا وقتی ادمین لاگ رو باز می‌کنه، همه‌ی اطلاعات رو
+            // ببینه، نه فقط همون یکی-دو فیلدی که عوض شده.
+            // changed_fields هم دقیقاً می‌گه کدوم فیلدها واقعاً تغییر کردن.
+            $before = collect($model->getOriginal())
+                ->except(['created_at', 'updated_at'])
+                ->all();
+
+            $after = collect($model->getAttributes())
+                ->except(['created_at', 'updated_at'])
+                ->all();
 
             $model->recordActivity(ActivityLog::ACTION_UPDATED, [
                 'before' => $before,
-                'after' => $changes,
+                'after' => $after,
+                'changed_fields' => array_values(array_diff(array_keys($changes), $excluded)),
             ]);
         });
 

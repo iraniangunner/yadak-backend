@@ -9,11 +9,19 @@ use App\Exports\ReturnsExport;
 use App\Models\Order;
 use App\Models\OrderReturn;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    /**
+     * اگه بایت نامعتبر UTF-8 توی داده باشه، به‌جای کرش کردن json_encode،
+     * فقط اون کاراکتر خراب رو با یه کاراکتر جایگزین (�) نشون بده.
+     */
+
+
     /**
      * بازه‌ی تاریخ مشترک بین همه‌ی گزارش‌ها. اگه از/تا داده نشه، کل تاریخچه.
      */
@@ -23,6 +31,27 @@ class ReportController extends Controller
             $request->filled('from') ? $request->date('from')->startOfDay() : null,
             $request->filled('to') ? $request->date('to')->endOfDay() : null,
         ];
+    }
+
+    /**
+     * چون این گزارش‌ها روی query هایی با GROUP BY/selectRaw ساخته شدن،
+     * paginate() استاندارد لاراول (که برای COUNT از خودِ query استفاده
+     * می‌کنه) با GROUP BY درست کار نمی‌کنه. برای همین همه‌ی ردیف‌ها رو
+     * می‌گیریم و خودمون توی PHP صفحه‌بندی می‌کنیم - برای گزارش‌های ادمین
+     * (چندصد/چندهزار ردیف حداکثر) کاملاً کافیه.
+     */
+    private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator
+    {
+        $perPage = $request->integer('per_page', 20);
+        $page = $request->integer('page', 1);
+
+        return new LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
     }
 
     /**
@@ -49,7 +78,7 @@ class ReportController extends Controller
             return Excel::download(new ProductSalesExport($rows), 'product-sales.xlsx');
         }
 
-        return response()->json(['data' => $rows]);
+        return response()->json($this->paginateCollection($rows, $request), 200, []);
     }
 
     /**
@@ -75,7 +104,7 @@ class ReportController extends Controller
             return Excel::download(new CustomerSalesExport($rows), 'customer-sales.xlsx');
         }
 
-        return response()->json(['data' => $rows]);
+        return response()->json($this->paginateCollection($rows, $request), 200, []);
     }
 
     /**
@@ -101,7 +130,7 @@ class ReportController extends Controller
             return Excel::download(new CitySalesExport($rows), 'city-sales.xlsx');
         }
 
-        return response()->json(['data' => $rows]);
+        return response()->json($this->paginateCollection($rows, $request), 200, []);
     }
 
     /**
@@ -122,6 +151,10 @@ class ReportController extends Controller
             return Excel::download(new ReturnsExport($query->get()), 'returns.xlsx');
         }
 
-        return response()->json($query->paginate($request->integer('per_page', 30)));
+        return response()->json(
+            $query->paginate($request->integer('per_page', 30)),
+            200,
+            []
+        );
     }
 }
