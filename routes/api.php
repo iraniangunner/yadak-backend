@@ -78,7 +78,8 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/vehicles', [VehicleController::class, 'index']);
 
 Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{product}', [ProductController::class, 'show']);
+// Route::get('/products/{product}', [ProductController::class, 'show']);
+Route::get('/products/{product:slug}', [ProductController::class, 'show']);
 
 // ثبت علاقه‌مندی موجودی: هم مهمان هم کاربر لاگین‌شده می‌تونن استفاده کنن.
 // چون این route پشت auth:api نیست، $request->user() همیشه null برمی‌گرده،
@@ -130,6 +131,7 @@ Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
     Route::delete('/admin/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
 
     Route::post('/admin/products', [ProductController::class, 'store']);
+    Route::get('/admin/products/{product}', [ProductController::class, 'show']);
     Route::put('/admin/products/{product}', [ProductController::class, 'update']);
     Route::delete('/admin/products/{product}', [ProductController::class, 'destroy']);
     Route::delete('/admin/products/{product}/images/{image}', [ProductController::class, 'destroyImage']);
@@ -189,6 +191,7 @@ Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
 
 // مدیریت قیمت پلکانی (ادمین و انبار)
 Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::get('/admin/products', [ProductController::class, 'adminIndex']);
     Route::post('/admin/products/{product}/price-tiers', [ProductPriceTierController::class, 'store']);
     Route::put('/admin/products/{product}/price-tiers/{tier}', [ProductPriceTierController::class, 'update']);
     Route::delete('/admin/products/{product}/price-tiers/{tier}', [ProductPriceTierController::class, 'destroy']);

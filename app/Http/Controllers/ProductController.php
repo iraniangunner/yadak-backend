@@ -9,12 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use App\Support\PersianSlug;
 
 class ProductController extends Controller
 {
-    public function __construct(private ImageService $imageService)
-    {
-    }
+    public function __construct(private ImageService $imageService) {}
 
     /**
      * لیست عمومی محصولات با فیلتر. مهم‌ترین فیلتر طبق بند ۲.۳ سند:
@@ -26,11 +25,11 @@ class ProductController extends Controller
         $products = Product::query()
             ->where('is_active', true)
             ->when($request->filled('vehicle_id'), function ($q) use ($request) {
-                $q->whereHas('vehicles', fn ($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
+                $q->whereHas('vehicles', fn($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
             })
-            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
-            ->when($request->filled('brand_id'), fn ($q) => $q->where('brand_id', $request->integer('brand_id')))
-            ->when($request->filled('stock_status'), fn ($q) => $q->where('stock_status', $request->string('stock_status')))
+            ->when($request->filled('category_id'), fn($q) => $q->where('category_id', $request->integer('category_id')))
+            ->when($request->filled('brand_id'), fn($q) => $q->where('brand_id', $request->integer('brand_id')))
+            ->when($request->filled('stock_status'), fn($q) => $q->where('stock_status', $request->string('stock_status')))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $search = $request->string('search')->toString();
                 $q->where(function ($q) use ($search) {
@@ -54,7 +53,6 @@ class ProductController extends Controller
 
         return response()->json(['product' => $product]);
     }
-
     /**
      * قیمت واحد و جمع کل برای یه تعداد مشخص، با در نظر گرفتن قیمت پلکانی
      * (اگه تعریف شده باشه) و تخفیف فعال. برای سبد خرید فرانت که می‌خواد
@@ -88,7 +86,9 @@ class ProductController extends Controller
     {
         $validated = $this->validateProduct($request);
 
-        $slug = Str::slug($validated['title']);
+        // $slug = Str::slug($validated['title']);
+        $slug = PersianSlug::make($validated['title']);
+
         if (Product::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
         }
@@ -122,6 +122,18 @@ class ProductController extends Controller
     {
         $validated = $this->validateProduct($request, $product);
 
+        // اگه عنوان جدید فرستاده شده و واقعاً با عنوان قبلی فرق داره، slug
+        // رو دوباره از روی عنوان جدید بساز (و باز هم چک یکتا بودن رو انجام بده).
+        if (array_key_exists('title', $validated) && $validated['title'] !== $product->title) {
+            $slug = PersianSlug::make($validated['title']);
+
+            if (Product::where('slug', $slug)->where('id', '!=', $product->id)->exists()) {
+                $slug .= '-' . \Illuminate\Support\Str::random(4);
+            }
+
+            $validated['slug'] = $slug;
+        }
+
         if ($request->hasFile('thumbnail')) {
             $validated['thumbnail'] = $this->imageService->replace(
                 $product->thumbnail,
@@ -142,7 +154,6 @@ class ProductController extends Controller
 
         return response()->json(['product' => $product->fresh(['images', 'vehicles'])]);
     }
-
     /**
      * حذف محصول همراه با پاک‌سازی فایل‌های فیزیکی thumbnail و گالری از دیسک.
      * ردیف‌های product_images و product_vehicle خودکار با cascadeOnDelete پاک می‌شن.
@@ -201,7 +212,9 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => "{$rule}|string|max:255",
             'sku' => [
-                $rule, 'string', 'max:100',
+                $rule,
+                'string',
+                'max:100',
                 Rule::unique('products', 'sku')->ignore($product?->id),
             ],
             'category_id' => 'nullable|exists:categories,id',
@@ -231,5 +244,27 @@ class ProductController extends Controller
         unset($data['thumbnail'], $data['images'], $data['vehicle_ids']);
 
         return $data;
+    }
+
+
+    public function adminIndex(Request $request)
+    {
+        $products = Product::query()
+            ->when($request->filled('category_id'), fn($q) => $q->where('category_id', $request->integer('category_id')))
+            ->when($request->filled('brand_id'), fn($q) => $q->where('brand_id', $request->integer('brand_id')))
+            ->when($request->filled('stock_status'), fn($q) => $q->where('stock_status', $request->string('stock_status')))
+            ->when($request->has('is_active'), fn($q) => $q->where('is_active', $request->boolean('is_active')))
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = $request->string('search')->toString();
+                $q->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%");
+                });
+            })
+            ->with(['brand:id,name,slug', 'category:id,name,slug'])
+            ->orderBy('title')
+            ->paginate($request->integer('per_page', 20));
+
+        return response()->json($products);
     }
 }

@@ -7,6 +7,7 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Support\PersianSlug;
 
 class CategoryController extends Controller
 {
@@ -51,7 +52,8 @@ class CategoryController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $slug = Str::slug($request->name);
+        // $slug = Str::slug($request->name);
+        $slug = PersianSlug::make($request->name);
 
         if (Category::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
@@ -89,7 +91,6 @@ class CategoryController extends Controller
             ],
             'thumbnail' => 'nullable|image|max:2048',
             'is_active' => 'sometimes|boolean',
-            'sales_stopped' => 'sometimes|boolean',
             'sort_order' => 'sometimes|integer|min:0',
         ]);
 
@@ -99,6 +100,16 @@ class CategoryController extends Controller
 
         $data = $validator->validated();
         unset($data['thumbnail']);
+
+        if (array_key_exists('name', $data) && $data['name'] !== $category->name) {
+            $slug = PersianSlug::make($data['name']);
+
+            if (Category::where('slug', $slug)->where('id', '!=', $category->id)->exists()) {
+                $slug .= '-' . \Illuminate\Support\Str::random(4);
+            }
+
+            $data['slug'] = $slug;
+        }
 
         if ($request->hasFile('thumbnail')) {
             $data['thumbnail'] = $this->imageService->replace(
@@ -112,7 +123,6 @@ class CategoryController extends Controller
 
         return response()->json(['category' => $category->fresh()]);
     }
-
     /**
      * حذف دسته‌بندی. زیردسته‌ها به‌خاطر nullOnDelete در migration، parent_id شون
      * null می‌شه (یعنی به دسته‌ی ریشه تبدیل می‌شن)، نه اینکه حذف بشن.
