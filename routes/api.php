@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffController;
@@ -33,6 +32,7 @@ use App\Http\Controllers\ShippingEstimateController;
 use App\Http\Controllers\ShippingOptionsController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\MyReferralController;
 
 /*
 |--------------------------------------------------------------------------
@@ -160,9 +160,12 @@ Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+Route::middleware(['auth:api', 'role:admin,warehouse,sales,support'])->group(function () {
     Route::get('/admin/orders', [AdminOrderController::class, 'index']);
     Route::get('/admin/orders/{order}', [AdminOrderController::class, 'show']);
+});
+
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
     Route::post('/admin/orders/{order}/approve', [AdminOrderController::class, 'approve']);
     Route::put('/admin/orders/{order}/items', [AdminOrderController::class, 'updateItems']);
     Route::post('/admin/orders/{order}/cancel', [AdminOrderController::class, 'cancel']);
@@ -240,7 +243,7 @@ Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
 
 // ---------- مدیریت مرجوعی (ادمین و انبار) ----------
 
-Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+Route::middleware(['auth:api', 'role:admin,warehouse,support'])->group(function () {
     Route::get('/admin/returns', [AdminOrderReturnController::class, 'index']);
     Route::post('/admin/returns/{return}/approve', [AdminOrderReturnController::class, 'approve']);
     Route::post('/admin/returns/{return}/reject', [AdminOrderReturnController::class, 'reject']);
@@ -324,4 +327,10 @@ Route::middleware(['auth:api', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:api', 'role:admin'])->group(function () {
     Route::get('/admin/users/search', [AdminUserController::class, 'search']);
+});
+
+
+Route::middleware(['auth:api'])->group(function () {
+    Route::get('/my/referral-code', [MyReferralController::class, 'code']);
+    Route::get('/my/referral-commissions', [MyReferralController::class, 'commissions']);
 });
