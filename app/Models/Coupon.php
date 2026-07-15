@@ -37,8 +37,8 @@ class Coupon extends Model
             'usage_limit' => 'integer',
             'used_count' => 'integer',
             'usage_limit_per_user' => 'integer',
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
+            'starts_at' => 'date:Y-m-d',
+            'ends_at' => 'date:Y-m-d',
             'is_active' => 'boolean',
         ];
     }
@@ -64,14 +64,16 @@ class Coupon extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        $now = now();
+        $today = today();
 
         return $query->where('is_active', true)
-            ->where(function (Builder $q) use ($now) {
-                $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
+            ->where(function (Builder $q) use ($today) {
+                $q->whereNull('starts_at')
+                    ->orWhereDate('starts_at', '<=', $today);
             })
-            ->where(function (Builder $q) use ($now) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now);
+            ->where(function (Builder $q) use ($today) {
+                $q->whereNull('ends_at')
+                    ->orWhereDate('ends_at', '>=', $today);
             });
     }
 
