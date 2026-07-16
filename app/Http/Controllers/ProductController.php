@@ -49,9 +49,21 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
-        $product->load(['images', 'vehicles', 'brand', 'category', 'priceTiers']);
+        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes']);
 
-        return response()->json(['product' => $product]);
+        // چک اینکه آیا کاربر لاگین‌شده (اگه لاگین باشه) این محصول رو
+        // علاقه‌مندی کرده یا نه - برای نمایش وضعیت اولیه‌ی دکمه‌ی قلب.
+        $isFavorited = false;
+        if ($userId = auth('api')->id()) {
+            $isFavorited = \App\Models\ProductFavorite::where('user_id', $userId)
+                ->where('product_id', $product->id)
+                ->exists();
+        }
+
+        return response()->json([
+            'product' => $product,
+            'is_favorited' => $isFavorited,
+        ]);
     }
     /**
      * قیمت واحد و جمع کل برای یه تعداد مشخص، با در نظر گرفتن قیمت پلکانی

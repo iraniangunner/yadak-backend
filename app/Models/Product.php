@@ -53,7 +53,14 @@ class Product extends Model
         'package_type',
     ];
 
-    protected $appends = ['thumbnail_url', 'final_price', 'discount_percent', 'is_purchasable'];
+    protected $appends = [
+        'thumbnail_url',
+        'final_price',
+        'discount_percent',
+        'is_purchasable',
+        'average_rating',
+        'reviews_count',
+    ];
 
     protected function casts(): array
     {
@@ -192,11 +199,14 @@ class Product extends Model
      * قیمت نهایی بعد از اعمال تخفیف (اگه باشه) + رُند کردن.
      * اگه تخفیفی وجود نداشته باشه، همون price خام برمی‌گرده.
      */
-    public function getFinalPriceAttribute(): int
+    public function getFinalPriceAttribute(): ?int
     {
+        if ($this->price === null) {
+            return null;
+        }
+
         return $this->applyDiscount($this->price);
     }
-
     /**
      * اعمال تخفیف فعال (اگه باشه) روی یه قیمت پایه‌ی دلخواه + رُند کردن.
      * این متد جداست تا هم برای قیمت عادی محصول (final_price) هم برای
@@ -264,5 +274,46 @@ class Product extends Model
         $basePrice = $tier?->price ?? $this->price;
 
         return $this->applyDiscount($basePrice);
+    }
+
+
+
+    /*
+|--------------------------------------------------------------------------
+| این متدها رو به مدل Product.php اضافه کن
+|--------------------------------------------------------------------------
+| نکته: رابطه‌ی ویژگی‌ها رو عمداً productAttributes می‌نامیم (نه attributes)
+| تا با متدهای داخلی خودِ Eloquent قاطی نشه.
+*/
+
+    public function productAttributes()
+    {
+        return $this->hasMany(ProductAttribute::class)->orderBy('sort_order');
+    }
+
+    public function favorites()
+    {
+        return $this->hasMany(ProductFavorite::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(ProductReview::class)->where('is_approved', true)->latest();
+    }
+
+    /**
+     * میانگین امتیاز (فقط نظرات تأییدشده)، گرد شده به یک رقم اعشار.
+     * این دو رو به $appends مدل هم اضافه کن: 'average_rating', 'reviews_count'
+     */
+    public function getAverageRatingAttribute(): ?float
+    {
+        $avg = $this->reviews()->avg('rating');
+
+        return $avg ? round($avg, 1) : null;
+    }
+
+    public function getReviewsCountAttribute(): int
+    {
+        return $this->reviews()->count();
     }
 }

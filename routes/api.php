@@ -33,6 +33,10 @@ use App\Http\Controllers\ShippingOptionsController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\MyReferralController;
+use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\ProductReviewController;
+use App\Http\Controllers\ProductAttributeController;
+use App\Http\Controllers\AdminProductReviewController;
 
 /*
 |--------------------------------------------------------------------------
@@ -333,4 +337,39 @@ Route::middleware(['auth:api', 'role:admin'])->group(function () {
 Route::middleware(['auth:api'])->group(function () {
     Route::get('/my/referral-code', [MyReferralController::class, 'code']);
     Route::get('/my/referral-commissions', [MyReferralController::class, 'commissions']);
+});
+
+
+
+
+// ---------- علاقه‌مندی‌ها (کاربر لاگین‌شده) ----------
+Route::middleware(['auth:api', 'throttle:30,1'])->group(function () {
+    Route::get('/favorites', [FavoriteController::class, 'index']);
+    Route::post('/products/{product}/favorite', [FavoriteController::class, 'store']);
+    Route::delete('/products/{product}/favorite', [FavoriteController::class, 'destroy']);
+});
+
+// ---------- نظرات محصول ----------
+// مشاهده عمومیه (نیازی به لاگین نداره)
+Route::get('/products/{product}/reviews', [ProductReviewController::class, 'index']);
+
+// ثبت/حذف نظر فقط کاربر لاگین‌شده
+Route::middleware(['auth:api', 'throttle:10,1'])->group(function () {
+    Route::post('/products/{product}/reviews', [ProductReviewController::class, 'store']);
+    Route::delete('/products/{product}/reviews', [ProductReviewController::class, 'destroy']);
+});
+
+// ---------- ویژگی‌های محصول (فقط ادمین/انبار) ----------
+Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
+    Route::post('/admin/products/{product}/attributes', [ProductAttributeController::class, 'store']);
+    Route::put('/admin/products/{product}/attributes/{attribute}', [ProductAttributeController::class, 'update']);
+    Route::delete('/admin/products/{product}/attributes/{attribute}', [ProductAttributeController::class, 'destroy']);
+});
+
+
+
+Route::middleware(['auth:api', 'role:admin'])->group(function () {
+    Route::get('/admin/reviews', [AdminProductReviewController::class, 'index']);
+    Route::post('/admin/reviews/{review}/approve', [AdminProductReviewController::class, 'approve']);
+    Route::post('/admin/reviews/{review}/reject', [AdminProductReviewController::class, 'reject']);
 });
