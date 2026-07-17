@@ -14,6 +14,7 @@ use App\Services\ShippingCostCalculator;
 use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class OrderController extends Controller
@@ -262,10 +263,18 @@ class OrderController extends Controller
 
         // پیامک اطلاع‌رسانی به مشتری که سفارش در حال بررسیه (بند ۴ سند)
         // نام الگو دقیقاً باید با چیزی که توی پنل کاوه‌نگار ساختی یکی باشه.
-        if ($order->user->phone) {
-            $this->sms->sendByTemplate($order->user->phone, 'order-registered', [
-                (string) $order->id,
-            ]);
+
+        // if ($order->user->phone) {
+        //     $this->sms->sendByTemplate($order->user->phone, 'order-registered', [
+        //         (string) $order->id,
+        //     ]);
+        // }
+        if ($order->shipping_receiver_phone) {
+            $this->sms->sendByTemplate(
+                $order->shipping_receiver_phone,
+                'order-registered',
+                [(string) $order->id]
+            );
         }
 
         $this->notifyStaff("سفارش جدید #{$order->id} ثبت شد و در انتظار بررسی موجودیه.");
@@ -284,6 +293,7 @@ class OrderController extends Controller
      */
     public function confirm(Request $request, Order $order)
     {
+         Log::info('confirm entered');
         if ($order->user_id !== $request->user()->id) {
             return response()->json(['message' => 'این سفارش متعلق به شما نیست.'], 403);
         }
@@ -295,10 +305,18 @@ class OrderController extends Controller
         $order->update(['confirmed_by_customer_at' => now()]);
         $order->transitionTo(Order::STATUS_AWAITING_PAYMENT, null, 'مشتری سبد اصلاح‌شده را تایید کرد.');
 
-        if ($order->user->phone) {
-            $this->sms->sendByTemplate($order->user->phone, 'order-approved', [
-                (string) $order->id,
-            ]);
+        // if ($order->user->phone) {
+        //     $this->sms->sendByTemplate($order->user->phone, 'order-approved', [
+        //         (string) $order->id,
+        //     ]);
+        // }
+
+        if ($order->shipping_receiver_phone) {
+            $this->sms->sendByTemplate(
+                $order->shipping_receiver_phone,
+                'order-approved',
+                [(string) $order->id]
+            );
         }
 
         return response()->json([

@@ -16,22 +16,38 @@ class PaymentController extends Controller
         private ZarinpalService $zarinpal,
         private SmsService $sms,
         private AccountingProviderContract $accountingProvider,
-    ) {
-    }
+    ) {}
 
     /**
      * ساخت لینک پرداخت زمان‌دار برای سفارشی که تایید شده (awaiting_payment).
      * فرانت بعد از این‌که سفارش تایید شد (approve یا confirm)، این endpoint
      * رو صدا می‌زنه تا آدرس صفحه‌ی پرداخت رو بگیره و کاربر رو بهش هدایت کنه.
      */
+
+
+    // بعد (کل متد رو با این جایگزین کن):
     public function initiate(Request $request, Order $order)
     {
         if ($order->user_id !== $request->user()->id) {
             return response()->json(['message' => 'این سفارش متعلق به شما نیست.'], 403);
         }
 
-        if ($order->status !== Order::STATUS_AWAITING_PAYMENT) {
+        // ⚠️ تغییر: expired هم قابل قبوله - یعنی مشتری می‌تونه بعد از انقضای
+        // لینک قبلی، دوباره برای همون سفارش تلاش کنه (نیازی به سفارش جدید نیست).
+        if (! in_array($order->status, [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_EXPIRED], true)) {
             return response()->json(['message' => 'این سفارش آماده‌ی پرداخت نیست.'], 422);
+        }
+
+        // اگه سفارش منقضی شده بود، دوباره فعالش می‌کنیم و پورسانت معرف (اگه
+        // لغو شده بود) رو هم برمی‌گردونیم به حالت در انتظار.
+        if ($order->status === Order::STATUS_EXPIRED) {
+            $order->transitionTo(
+                Order::STATUS_AWAITING_PAYMENT,
+                $request->user(),
+                'مشتری درخواست تلاش مجدد پرداخت داد؛ سفارش دوباره برای پرداخت فعال شد.'
+            );
+
+            $order->referralCommission?->update(['status' => ReferralCommission::STATUS_PENDING]);
         }
 
         // اگه لینک قبلی هنوز منقضی نشده، همون رو دوباره برگردون (authority جدید نساز)
@@ -164,12 +180,20 @@ class PaymentController extends Controller
 
         // پیامک تایید پرداخت به مشتری + اعلان به انبار برای آماده‌سازی (بند ۴ سند)
         // نام الگو دقیقاً باید با چیزی که توی پنل کاوه‌نگار ساختی یکی باشه.
-        if ($order->user->phone) {
-            $this->sms->sendByTemplate($order->user->phone, 'order-paid', [
-                (string) $order->id,
-                (string) $order->payment_ref_id,
-            ]);
+        // if ($order->user->phone) {
+        //     $this->sms->sendByTemplate($order->user->phone, 'order-paid', [
+        //         (string) $order->id,
+        //         (string) $order->payment_ref_id,
+        //     ]);
+        // }
+        if ($order->shipping_receiver_phone) {
+            $this->sms->sendByTemplate(
+                $order->shipping_receiver_phone,
+                'order-paid',
+                [(string) $order->id,  (string) $order->payment_ref_id,]
+            );
         }
+
 
         $this->notifyStaff("سفارش #{$order->id} پرداخت شد (کد پیگیری {$order->payment_ref_id}) و آماده‌ی پردازش انبار است.");
 
@@ -182,7 +206,7 @@ class PaymentController extends Controller
     private function notifyStaff(string $message): void
     {
         $mobiles = collect(explode(',', config('services.admin_mobile', '')))
-            ->map(fn ($m) => trim($m))
+            ->map(fn($m) => trim($m))
             ->filter();
 
         foreach ($mobiles as $mobile) {

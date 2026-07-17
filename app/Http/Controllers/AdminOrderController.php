@@ -60,10 +60,18 @@ class AdminOrderController extends Controller
 
         // پیامک راهنمای پرداخت به مشتری (بند ۴ سند)
         // نام الگو دقیقاً باید با چیزی که توی پنل کاوه‌نگار ساختی یکی باشه.
-        if ($order->user->phone) {
-            $this->sms->sendByTemplate($order->user->phone, 'order-approved', [
-                (string) $order->id,
-            ]);
+        // if ($order->user->phone) {
+        //     $this->sms->sendByTemplate($order->user->phone, 'order-approved', [
+        //         (string) $order->id,
+        //     ]);
+        // }
+        
+        if ($order->shipping_receiver_phone) {
+            $this->sms->sendByTemplate(
+                $order->shipping_receiver_phone,
+                'order-approved',
+                [(string) $order->id]
+            );
         }
 
         return response()->json([
@@ -143,10 +151,18 @@ class AdminOrderController extends Controller
 
         // پیامک لینک تایید سبد اصلاح‌شده به مشتری (بند ۴ سند)
         $order->refresh();
-        if ($order->user->phone) {
-            $this->sms->sendByTemplate($order->user->phone, 'order-needs-confirmation', [
-                (string) $order->id,
-            ]);
+        // if ($order->user->phone) {
+        //     $this->sms->sendByTemplate($order->user->phone, 'order-needs-confirmation', [
+        //         (string) $order->id,
+        //     ]);
+        // }
+        
+        if ($order->shipping_receiver_phone) {
+            $this->sms->sendByTemplate(
+                $order->shipping_receiver_phone,
+                'order-needs-confirmation',
+                [(string) $order->id]
+            );
         }
 
         return response()->json([

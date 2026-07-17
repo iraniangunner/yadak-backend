@@ -22,33 +22,45 @@ class TipaxShippingProvider implements ShippingProviderContract
         $this->baseUrl = config('services.tipax.base_url', 'https://api.tipax.ir');
     }
 
-    public function getOptions(string $city, float $totalWeightKg): array
-    {
-        try {
-            $response = Http::withToken($this->apiKey)
-                ->timeout(5)
-                ->get("{$this->baseUrl}/v1/shipping-options", [
-                    'destination_city' => $city,
-                    'weight_kg' => $totalWeightKg,
-                ]);
+    // public function getOptions(string $city, float $totalWeightKg): array
+    // {
+    //     try {
+    //         $response = Http::withToken($this->apiKey)
+    //             ->timeout(5)
+    //             ->get("{$this->baseUrl}/v1/shipping-options", [
+    //                 'destination_city' => $city,
+    //                 'weight_kg' => $totalWeightKg,
+    //             ]);
 
-            if (! $response->successful()) {
-                Log::error('خطا در دریافت گزینه‌های تیپاکس', ['response' => $response->body()]);
+    //         if (! $response->successful()) {
+    //             Log::error('خطا در دریافت گزینه‌های تیپاکس', ['response' => $response->body()]);
 
-                return [];
-            }
+    //             return [];
+    //         }
 
-            // این بخش رو دقیقاً بر اساس ساختار واقعی پاسخ API تیپاکس تنظیم کن
-            return collect($response->json('data', []))->map(fn ($item) => [
-                'carrier' => 'تیپاکس',
-                'service_name' => $item['service_name'],
-                'cost' => (int) $item['price'],
-                'eta_days' => (int) $item['estimated_days'],
-            ])->all();
-        } catch (\Throwable $e) {
-            Log::error('استثنا در اتصال به تیپاکس', ['error' => $e->getMessage()]);
+    //         // این بخش رو دقیقاً بر اساس ساختار واقعی پاسخ API تیپاکس تنظیم کن
+    //         return collect($response->json('data', []))->map(fn ($item) => [
+    //             'carrier' => 'تیپاکس',
+    //             'service_name' => $item['service_name'],
+    //             'cost' => (int) $item['price'],
+    //             'eta_days' => (int) $item['estimated_days'],
+    //         ])->all();
+    //     } catch (\Throwable $e) {
+    //         Log::error('استثنا در اتصال به تیپاکس', ['error' => $e->getMessage()]);
 
-            return [];
-        }
-    }
+    //         return [];
+    //     }
+    // }
+
+   public function getOptions(string $city, float $totalWeightKg): array
+{
+    return [
+        [
+            'carrier' => 'تیپاکس',
+            'service_name' => 'ارسال عادی',
+            'cost' => 85000,
+            'eta_days' => 2,
+        ]
+    ];
+}
 }

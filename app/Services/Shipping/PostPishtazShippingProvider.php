@@ -22,34 +22,46 @@ class PostPishtazShippingProvider implements ShippingProviderContract
         $this->baseUrl = config('services.post_pishtaz.base_url', 'https://api.post.ir');
     }
 
+    // public function getOptions(string $city, float $totalWeightKg): array
+    // {
+    //     try {
+    //         $response = Http::withToken($this->apiKey)
+    //             ->timeout(5)
+    //             ->get("{$this->baseUrl}/v1/tariff", [
+    //                 'destination_city' => $city,
+    //                 'weight_kg' => $totalWeightKg,
+    //                 'service' => 'pishtaz',
+    //             ]);
+
+    //         if (! $response->successful()) {
+    //             Log::error('خطا در دریافت نرخ پست پیشتاز', ['response' => $response->body()]);
+
+    //             return [];
+    //         }
+
+    //         // ⚠️ این بخش رو دقیقاً بر اساس ساختار واقعی پاسخ API پست تنظیم کن
+    //         return [[
+    //             'carrier' => 'پست',
+    //             'service_name' => 'پیشتاز',
+    //             'cost' => (int) $response->json('price', 0),
+    //             'eta_days' => (int) $response->json('delivery_days', 3),
+    //         ]];
+    //     } catch (\Throwable $e) {
+    //         Log::error('استثنا در اتصال به پست پیشتاز', ['error' => $e->getMessage()]);
+
+    //         return [];
+    //     }
+    // }
+
     public function getOptions(string $city, float $totalWeightKg): array
     {
-        try {
-            $response = Http::withToken($this->apiKey)
-                ->timeout(5)
-                ->get("{$this->baseUrl}/v1/tariff", [
-                    'destination_city' => $city,
-                    'weight_kg' => $totalWeightKg,
-                    'service' => 'pishtaz',
-                ]);
-
-            if (! $response->successful()) {
-                Log::error('خطا در دریافت نرخ پست پیشتاز', ['response' => $response->body()]);
-
-                return [];
-            }
-
-            // ⚠️ این بخش رو دقیقاً بر اساس ساختار واقعی پاسخ API پست تنظیم کن
-            return [[
+        return [
+            [
                 'carrier' => 'پست',
                 'service_name' => 'پیشتاز',
-                'cost' => (int) $response->json('price', 0),
-                'eta_days' => (int) $response->json('delivery_days', 3),
-            ]];
-        } catch (\Throwable $e) {
-            Log::error('استثنا در اتصال به پست پیشتاز', ['error' => $e->getMessage()]);
-
-            return [];
-        }
+                'cost' => 65000,
+                'eta_days' => 3,
+            ]
+        ];
     }
 }
