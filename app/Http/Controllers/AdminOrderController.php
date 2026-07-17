@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\Validator;
 
 class AdminOrderController extends Controller
 {
-    public function __construct(private SmsService $sms)
-    {
-    }
+    public function __construct(private SmsService $sms) {}
 
     /**
      * لیست همه‌ی سفارش‌ها با فیلتر بر اساس وضعیت (بند ۴ سند: گزارش‌گیری از
@@ -23,7 +21,7 @@ class AdminOrderController extends Controller
     public function index(Request $request)
     {
         $orders = Order::query()
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('status'), fn($q) => $q->where('status', $request->string('status')))
             ->with(['user:id,name,phone,email'])
             ->withCount('items')
             ->latest()
@@ -37,7 +35,14 @@ class AdminOrderController extends Controller
      */
     public function show(Order $order)
     {
-        $order->load(['items', 'statusHistories.changedBy:id,name', 'user:id,name,phone,email']);
+        $order->load([
+            'items',
+            'statusHistories.changedBy:id,name',
+            'user:id,name,phone,email',
+            'coupon:id,code,type,value',
+            'referralCode:id,code',
+            'referralCode.user:id,name',
+        ]);
 
         return response()->json(['order' => $order]);
     }
@@ -65,7 +70,7 @@ class AdminOrderController extends Controller
         //         (string) $order->id,
         //     ]);
         // }
-        
+
         if ($order->shipping_receiver_phone) {
             $this->sms->sendByTemplate(
                 $order->shipping_receiver_phone,
@@ -124,7 +129,7 @@ class AdminOrderController extends Controller
             // جمع مبلغ فقط بر اساس آیتم‌هایی که موجودن محاسبه می‌شه
             $subtotal = $order->items()->where('is_available', true)
                 ->get()
-                ->sum(fn ($item) => $item->price * $item->quantity);
+                ->sum(fn($item) => $item->price * $item->quantity);
 
             // اگه سفارش کد تخفیف داشته، تخفیف رو متناسب با subtotal جدید
             // دوباره حساب می‌کنیم (برای درصدی طبیعتاً کمتر می‌شه؛ برای مبلغ
@@ -156,7 +161,7 @@ class AdminOrderController extends Controller
         //         (string) $order->id,
         //     ]);
         // }
-        
+
         if ($order->shipping_receiver_phone) {
             $this->sms->sendByTemplate(
                 $order->shipping_receiver_phone,

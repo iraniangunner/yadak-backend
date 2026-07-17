@@ -339,6 +339,11 @@ Route::middleware(['auth:api'])->group(function () {
     Route::get('/my/referral-commissions', [MyReferralController::class, 'commissions']);
 });
 
+Route::middleware(['auth:api', 'throttle:20,1'])->group(function () {
+    Route::post('/coupons/check', [CouponController::class, 'check']);
+    Route::post('/referral-codes/check', [MyReferralController::class, 'check']);
+});
+
 
 
 

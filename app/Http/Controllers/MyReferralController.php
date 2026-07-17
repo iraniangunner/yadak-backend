@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ReferralCode;
 use App\Models\ReferralCommission;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 
 /**
@@ -35,5 +36,36 @@ class MyReferralController extends Controller
             ->paginate($request->integer('per_page', 20));
 
         return response()->json($commissions);
+    }
+
+    /**
+     * بررسی زنده‌ی یه کد معرف قبل از ثبت نهایی سفارش (توی تسویه‌حساب
+     * مشتری). برخلاف کد تخفیف، این کد هیچ اثری روی قیمت مشتری نداره -
+     * فقط برای محاسبه‌ی پورسانتِ معرف/فروشنده بعد از پرداخت موفق استفاده
+     * می‌شه؛ برای همین این پاسخ فقط valid/invalid برمی‌گردونه، نه تخفیف.
+     */
+    public function check(Request $request)
+    {
+        $validator = Validator::make($request->all(), ['code' => 'required|string']);
+
+        if ($validator->fails()) {
+            return response()->json(['valid' => false, 'message' => 'کد وارد نشده.'], 422);
+        }
+
+        $code = strtoupper(trim($request->string('code')->toString()));
+        $referralCode = ReferralCode::active()->where('code', $code)->first();
+
+        if (! $referralCode) {
+            return response()->json(['valid' => false, 'message' => 'کد معرف پیدا نشد یا غیرفعاله.']);
+        }
+
+        if ($referralCode->user_id === $request->user()->id) {
+            return response()->json(['valid' => false, 'message' => 'نمی‌تونید از کد معرف خودتون استفاده کنید.']);
+        }
+
+        return response()->json([
+            'valid' => true,
+            'message' => 'کد معرف معتبره (این کد تخفیفی نداره، فقط پورسانت به معرف تعلق می‌گیره).',
+        ]);
     }
 }
