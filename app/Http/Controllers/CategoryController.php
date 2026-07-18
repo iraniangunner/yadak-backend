@@ -7,11 +7,12 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use App\Support\PersianSlug;
 
 class CategoryController extends Controller
 {
-    public function __construct(private ImageService $imageService) {}
+    public function __construct(private ImageService $imageService)
+    {
+    }
 
     /**
      * لیست عمومی دسته‌بندی‌ها. با ?tree=1 به‌صورت درختی (فقط ریشه‌ها + children)
@@ -30,7 +31,7 @@ class CategoryController extends Controller
         }
 
         $categories = Category::query()
-            ->when(! $request->boolean('with_inactive'), fn($q) => $q->where('is_active', true))
+            ->when(! $request->boolean('with_inactive'), fn ($q) => $q->where('is_active', true))
             ->orderBy('sort_order')
             ->paginate($request->integer('per_page', 50));
 
@@ -52,8 +53,7 @@ class CategoryController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // $slug = Str::slug($request->name);
-        $slug = PersianSlug::make($request->name);
+        $slug = Str::slug($request->name);
 
         if (Category::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
@@ -78,6 +78,13 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category)
     {
+        // ⚠️ چون فرانت ممکنه parent_id رو به‌صورت رشته‌ی خالی بفرسته (یعنی
+        // «بدون والد»)، و قانون nullable فقط null واقعی رو قبول می‌کنه
+        // (نه رشته‌ی خالی)، قبل از اعتبارسنجی نرمالش می‌کنیم.
+        if ($request->has('parent_id') && $request->input('parent_id') === '') {
+            $request->merge(['parent_id' => null]);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'parent_id' => [
@@ -91,6 +98,7 @@ class CategoryController extends Controller
             ],
             'thumbnail' => 'nullable|image|max:2048',
             'is_active' => 'sometimes|boolean',
+            'sales_stopped' => 'sometimes|boolean',
             'sort_order' => 'sometimes|integer|min:0',
         ]);
 
@@ -100,16 +108,6 @@ class CategoryController extends Controller
 
         $data = $validator->validated();
         unset($data['thumbnail']);
-
-        if (array_key_exists('name', $data) && $data['name'] !== $category->name) {
-            $slug = PersianSlug::make($data['name']);
-
-            if (Category::where('slug', $slug)->where('id', '!=', $category->id)->exists()) {
-                $slug .= '-' . \Illuminate\Support\Str::random(4);
-            }
-
-            $data['slug'] = $slug;
-        }
 
         if ($request->hasFile('thumbnail')) {
             $data['thumbnail'] = $this->imageService->replace(
@@ -123,6 +121,7 @@ class CategoryController extends Controller
 
         return response()->json(['category' => $category->fresh()]);
     }
+
     /**
      * حذف دسته‌بندی. زیردسته‌ها به‌خاطر nullOnDelete در migration، parent_id شون
      * null می‌شه (یعنی به دسته‌ی ریشه تبدیل می‌شن)، نه اینکه حذف بشن.
