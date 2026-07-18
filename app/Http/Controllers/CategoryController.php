@@ -7,6 +7,7 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Support\PersianSlug;
 
 class CategoryController extends Controller
 {
@@ -53,7 +54,9 @@ class CategoryController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $slug = Str::slug($request->name);
+        // $slug = Str::slug($request->name);
+
+        $slug = PersianSlug::make($request->name);
 
         if (Category::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
