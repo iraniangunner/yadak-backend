@@ -25,11 +25,20 @@ class ProductController extends Controller
         $products = Product::query()
             ->where('is_active', true)
             ->when($request->filled('vehicle_id'), function ($q) use ($request) {
-                $q->whereHas('vehicles', fn($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
+                $q->whereHas('vehicles', fn ($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
             })
-            ->when($request->filled('category_id'), fn($q) => $q->where('category_id', $request->integer('category_id')))
-            ->when($request->filled('brand_id'), fn($q) => $q->where('brand_id', $request->integer('brand_id')))
-            ->when($request->filled('stock_status'), fn($q) => $q->where('stock_status', $request->string('stock_status')))
+            ->when($request->filled('category_id'), function ($q) use ($request) {
+                $ids = array_filter(explode(',', $request->string('category_id')->toString()));
+                $q->whereIn('category_id', $ids);
+            })
+            ->when($request->filled('brand_id'), function ($q) use ($request) {
+                $ids = array_filter(explode(',', $request->string('brand_id')->toString()));
+                $q->whereIn('brand_id', $ids);
+            })
+            ->when($request->filled('stock_status'), function ($q) use ($request) {
+                $statuses = array_filter(explode(',', $request->string('stock_status')->toString()));
+                $q->whereIn('stock_status', $statuses);
+            })
             ->when($request->filled('search'), function ($q) use ($request) {
                 $search = $request->string('search')->toString();
                 $q->where(function ($q) use ($search) {
@@ -37,10 +46,24 @@ class ProductController extends Controller
                         ->orWhere('sku', 'like', "%{$search}%");
                 });
             })
-            ->with(['brand:id,name,slug', 'category:id,name,slug'])
-            ->orderBy('title')
-            ->paginate($request->integer('per_page', 24));
-
+            // میانگین امتیاز به‌عنوان یه ستون واقعی SQL (reviews_avg_rating) -
+            // چون فقط این‌جوری می‌شه هم فیلترش کرد هم مرتبش کرد.
+            ->withAvg('reviews', 'rating')
+            ->when($request->filled('min_rating'), function ($q) use ($request) {
+                $q->having('reviews_avg_rating', '>=', $request->float('min_rating'));
+            })
+            ->with(['brand:id,name,slug', 'category:id,name,slug']);
+    
+        $products = match ($request->string('sort')->toString()) {
+            'price_asc' => $products->orderBy('price', 'asc'),
+            'price_desc' => $products->orderBy('price', 'desc'),
+            'rating' => $products->orderByDesc('reviews_avg_rating'),
+            'newest' => $products->orderByDesc('created_at'),
+            default => $products->orderBy('title'),
+        };
+    
+        $products = $products->paginate($request->integer('per_page', 24));
+    
         return response()->json($products);
     }
 
