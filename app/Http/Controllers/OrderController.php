@@ -31,6 +31,7 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $orders = $request->user()->orders()
+            ->when($request->filled('status'), fn($q) => $q->where('status', $request->string('status')))
             ->with('items')
             ->latest()
             ->paginate($request->integer('per_page', 20));
@@ -293,7 +294,7 @@ class OrderController extends Controller
      */
     public function confirm(Request $request, Order $order)
     {
-         Log::info('confirm entered');
+        Log::info('confirm entered');
         if ($order->user_id !== $request->user()->id) {
             return response()->json(['message' => 'این سفارش متعلق به شما نیست.'], 403);
         }

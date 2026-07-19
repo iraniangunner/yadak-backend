@@ -20,6 +20,12 @@ class BrandController extends Controller
     {
         $brands = Brand::query()
             ->when(! $request->boolean('with_inactive'), fn($q) => $q->where('is_active', true))
+            ->when($request->filled('category_id'), function ($q) use ($request) {
+                $categoryIds = array_filter(explode(',', $request->string('category_id')->toString()));
+                $q->whereHas('products', function ($q) use ($categoryIds) {
+                    $q->whereIn('category_id', $categoryIds)->where('is_active', true);
+                });
+            })
             ->orderBy('name')
             ->paginate($request->integer('per_page', 50));
 
