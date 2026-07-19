@@ -301,6 +301,11 @@ class Product extends Model
         return $this->hasMany(ProductReview::class)->where('is_approved', true)->latest();
     }
 
+    public function orderItems()
+    {
+        return $this->hasMany(\App\Models\OrderItem::class);
+    }
+
     /**
      * میانگین امتیاز (فقط نظرات تأییدشده)، گرد شده به یک رقم اعشار.
      * این دو رو به $appends مدل هم اضافه کن: 'average_rating', 'reviews_count'

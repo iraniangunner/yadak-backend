@@ -25,7 +25,7 @@ class ProductController extends Controller
         $products = Product::query()
             ->where('is_active', true)
             ->when($request->filled('vehicle_id'), function ($q) use ($request) {
-                $q->whereHas('vehicles', fn ($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
+                $q->whereHas('vehicles', fn($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
             })
             ->when($request->filled('category_id'), function ($q) use ($request) {
                 $ids = array_filter(explode(',', $request->string('category_id')->toString()));
@@ -52,18 +52,24 @@ class ProductController extends Controller
             ->when($request->filled('min_rating'), function ($q) use ($request) {
                 $q->having('reviews_avg_rating', '>=', $request->float('min_rating'));
             })
+            // مجموع واقعی تعداد فروخته‌شده (total_sold) - فقط از سفارش‌های
+            // واقعاً پرداخت‌شده حساب می‌شه، نه سفارش‌های در انتظار/لغوشده.
+            ->withSum(['orderItems as total_sold' => function ($q) {
+                $q->whereHas('order', fn($q) => $q->where('status', \App\Models\Order::STATUS_PAID));
+            }], 'quantity')
             ->with(['brand:id,name,slug', 'category:id,name,slug']);
-    
+
         $products = match ($request->string('sort')->toString()) {
             'price_asc' => $products->orderBy('price', 'asc'),
             'price_desc' => $products->orderBy('price', 'desc'),
             'rating' => $products->orderByDesc('reviews_avg_rating'),
             'newest' => $products->orderByDesc('created_at'),
+            'best_selling' => $products->orderByDesc('total_sold'),
             default => $products->orderBy('title'),
         };
-    
+
         $products = $products->paginate($request->integer('per_page', 24));
-    
+
         return response()->json($products);
     }
 
