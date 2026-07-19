@@ -284,6 +284,7 @@ Route::middleware(['auth:api', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:api', 'role:admin'])->group(function () {
     Route::get('/admin/articles', [ArticleController::class, 'adminIndex']);
+    Route::get('/admin/articles/{article}', [ArticleController::class, 'adminShow']);
     Route::post('/admin/articles', [ArticleController::class, 'store']);
     Route::put('/admin/articles/{article}', [ArticleController::class, 'update']);
     Route::delete('/admin/articles/{article}', [ArticleController::class, 'destroy']);

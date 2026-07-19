@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\ProductStockSubscription;
 use App\Services\ImageService;
+use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -13,7 +15,10 @@ use App\Support\PersianSlug;
 
 class ProductController extends Controller
 {
-    public function __construct(private ImageService $imageService) {}
+    public function __construct(
+        private ImageService $imageService,
+        private SmsService $sms,
+    ) {}
 
     /**
      * لیست عمومی محصولات با فیلتر. مهم‌ترین فیلتر طبق بند ۲.۳ سند:
@@ -169,7 +174,7 @@ class ProductController extends Controller
             $slug = PersianSlug::make($validated['title']);
 
             if (Product::where('slug', $slug)->where('id', '!=', $product->id)->exists()) {
-                $slug .= '-' . \Illuminate\Support\Str::random(4);
+                $slug .= '-' . Str::random(4);
             }
 
             $validated['slug'] = $slug;
@@ -183,6 +188,11 @@ class ProductController extends Controller
             );
         }
 
+        // ⚠️ جدید: قبل از اعمال تغییرات، وضعیت موجودی فعلی رو نگه می‌داریم
+        // تا بعد از آپدیت بشه فهمید آیا واقعاً از «ناموجود» به «موجود»
+        // تغییر کرده یا نه.
+        $wasUnavailable = ! $product->isAvailable();
+
         $product->update($validated);
 
         if ($request->hasFile('images')) {
@@ -191,6 +201,12 @@ class ProductController extends Controller
 
         if ($request->has('vehicle_ids')) {
             $product->vehicles()->sync($request->input('vehicle_ids', []));
+        }
+
+        // ⚠️ جدید: اگه واقعاً از ناموجود به موجود تغییر کرده، مشترکینِ
+        // «اطلاع بده وقتی موجود شد» رو با پیامک مطلع کن.
+        if ($wasUnavailable && $product->fresh()->isAvailable()) {
+            $this->notifyStockSubscribers($product);
         }
 
         return response()->json(['product' => $product->fresh(['images', 'vehicles'])]);
@@ -239,6 +255,33 @@ class ProductController extends Controller
                 'sort_order' => $nextOrder++,
             ]);
         }
+    }
+
+    /**
+     * به همه‌ی مشترکینِ این محصول که هنوز اطلاع داده نشدن، پیامک بزن و
+     * بعدش notified=true کن تا دوباره پیامک نگیرن.
+     *
+     * نام الگوی پیامک (product-back-in-stock) باید دقیقاً با چیزی که
+     * توی پنل کاوه‌نگار براش می‌سازی یکی باشه.
+     */
+    private function notifyStockSubscribers(Product $product): void
+    {
+        $subscriptions = ProductStockSubscription::where('product_id', $product->id)
+            ->where('notified', false)
+            ->with('user:id,phone')
+            ->get();
+
+        foreach ($subscriptions as $subscription) {
+            $mobile = $subscription->mobile ?? $subscription->user?->phone;
+
+            if ($mobile) {
+                $this->sms->sendByTemplate($mobile, 'product-back-in-stock', [$product->title]);
+            }
+        }
+
+        ProductStockSubscription::where('product_id', $product->id)
+            ->where('notified', false)
+            ->update(['notified' => true]);
     }
 
     /**

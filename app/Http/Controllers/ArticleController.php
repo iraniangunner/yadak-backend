@@ -6,6 +6,7 @@ use App\Models\Article;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Support\PersianSlug;
 use Illuminate\Support\Str;
 
 class ArticleController extends Controller
@@ -13,7 +14,8 @@ class ArticleController extends Controller
     public function __construct(private ImageService $imageService) {}
 
     /**
-     * لیست عمومی مقالات منتشرشده.
+     * لیست عمومی مقالات منتشرشده - با جستجو (روی عنوان) و مرتب‌سازی
+     * اختیاری (?sort=oldest برای قدیمی‌ترین، پیش‌فرض جدیدترین).
      */
     public function index(Request $request)
     {
@@ -22,7 +24,14 @@ class ArticleController extends Controller
             ->where(function ($q) {
                 $q->whereNull('published_at')->orWhere('published_at', '<=', now());
             })
-            ->orderByDesc('published_at')
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $q->where('title', 'like', '%' . $request->string('search') . '%');
+            })
+            ->when(
+                $request->string('sort')->toString() === 'oldest',
+                fn($q) => $q->orderBy('published_at'),
+                fn($q) => $q->orderByDesc('published_at')
+            )
             ->paginate($request->integer('per_page', 10));
 
         return response()->json($articles);
@@ -59,11 +68,23 @@ class ArticleController extends Controller
         return response()->json($articles);
     }
 
+    /**
+     * نمایش کامل یک مقاله برای ادمین (با excerpt/content/products کامل) -
+     * برای پر کردن درست فرم ویرایش؛ لیست ادمین (adminIndex) این فیلدهای
+     * سنگین رو برنمی‌گردونه، برای همین فرم ویرایش نیاز به یه fetch جدا داره.
+     */
+    public function adminShow(Article $article)
+    {
+        $article->load('products', 'author:id,name');
+
+        return response()->json(['article' => $article]);
+    }
+
     public function store(Request $request)
     {
         $validated = $this->validateArticle($request);
 
-        $slug = Str::slug($validated['title']);
+        $slug = PersianSlug::make($validated['title']);
         if (Article::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
         }
@@ -90,6 +111,18 @@ class ArticleController extends Controller
     public function update(Request $request, Article $article)
     {
         $validated = $this->validateArticle($request, $article);
+
+        // اگه عنوان جدید فرستاده شده و واقعاً با عنوان قبلی فرق داره، slug
+        // رو دوباره از روی عنوان جدید بساز (و باز هم چک یکتا بودن رو انجام بده).
+        if (array_key_exists('title', $validated) && $validated['title'] !== $article->title) {
+            $slug = PersianSlug::make($validated['title']);
+
+            if (Article::where('slug', $slug)->where('id', '!=', $article->id)->exists()) {
+                $slug .= '-' . Str::random(4);
+            }
+
+            $validated['slug'] = $slug;
+        }
 
         if ($request->hasFile('thumbnail')) {
             $validated['thumbnail'] = $this->imageService->replace(
