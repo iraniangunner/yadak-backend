@@ -275,7 +275,12 @@ class ProductController extends Controller
             $mobile = $subscription->mobile ?? $subscription->user?->phone;
 
             if ($mobile) {
-                $this->sms->sendByTemplate($mobile, 'product-back-in-stock', [$product->title]);
+                // ⚠️ کاوه‌نگار توی verify/lookup، فاصله (و بعضی کاراکترهای
+                // خاص) رو توی مقدار توکن قبول نمی‌کنه و با خطای ۴۳۱
+                // ("ساختار کد صحیح نمی‌باشد") رد می‌کنه - برای همین
+                // فاصله‌ها رو با خط‌تیره جایگزین می‌کنیم.
+                $safeTitle = str_replace(' ', '-', $product->title);
+                $this->sms->sendByTemplate($mobile, 'product-back-in-stock', [$safeTitle]);
             }
         }
 
@@ -283,7 +288,6 @@ class ProductController extends Controller
             ->where('notified', false)
             ->update(['notified' => true]);
     }
-
     /**
      * @param  Product|null  $product  فقط موقع update پاس داده می‌شه؛ برای اینکه
      *                                 unique rule روی sku، خودِ رکورد فعلی رو نادیده بگیره.
