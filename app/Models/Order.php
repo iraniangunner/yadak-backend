@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Order extends Model
 {
-    use LogsActivity , HasFactory;
+    use LogsActivity, HasFactory;
 
     /**
      * تغییرات فقط روی status لاگ نشه، چون توی order_status_histories
@@ -44,6 +44,7 @@ class Order extends Model
         'status',
         'subtotal',
         'discount_amount',
+        'cart_discount_amount',
         'shipping_cost',
         'total_amount',
         'customer_note',
@@ -80,6 +81,7 @@ class Order extends Model
             'paid_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'invoiced_at' => 'datetime',
+            'cart_discount_amount' => 'integer',
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\ShippingProviderContract;
 use App\Models\Address;
+use App\Models\CartDiscountRule;
 use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
@@ -191,6 +192,16 @@ class OrderController extends Controller
 
             $discountAmount = $coupon ? $coupon->calculateDiscount($subtotal) : 0;
 
+            // ⚠️ جدید: تخفیف خودکار سبد بر اساس عبور از مبلغ (بند ۳.۳ سند).
+            // بین همه‌ی قوانین فعالی که subtotal ازشون رد شده، بیشترین
+            // حدنصاب (min_amount) رو انتخاب می‌کنیم - نه اولین موردی که پیدا شد.
+            // این تخفیف مستقل از کد تخفیفه و باهاش جمع می‌شه (نه جایگزینش).
+            $cartDiscountRule = CartDiscountRule::active()
+                ->where('min_amount', '<=', $subtotal)
+                ->orderByDesc('min_amount')
+                ->first();
+            $cartDiscountAmount = $cartDiscountRule ? $cartDiscountRule->calculateDiscount($subtotal) : 0;
+
             // اگه مشتری یه گزینه‌ی حمل مشخص انتخاب کرده، هزینه‌ی همون گزینه
             // استفاده می‌شه؛ وگرنه (فقط آدرس داده شده بدون انتخاب شرکت خاص)
             // از نرخ ساده‌ی داخلی استفاده می‌کنیم؛ اگه هیچ‌کدوم نباشه صفره.
@@ -200,9 +211,10 @@ class OrderController extends Controller
                 default => 0,
             };
 
-            $totalAmount = $coupon
-                ? PriceCalculator::round($subtotal - $discountAmount + $shippingCost)
-                : $subtotal + $shippingCost;
+            // ⚠️ همیشه رند می‌کنیم (نه فقط وقتی کد تخفیف بود) - هم برای
+            // یکدستی، هم چون بند ۳.۳ سند صریحاً «رند کردن قیمت پس از اعمال
+            // تخفیف» رو خواسته.
+            $totalAmount = PriceCalculator::round($subtotal - $discountAmount - $cartDiscountAmount + $shippingCost);
 
             $order = Order::create([
                 'user_id' => $request->user()->id,
@@ -212,6 +224,7 @@ class OrderController extends Controller
                 'status' => Order::STATUS_PENDING_REVIEW,
                 'subtotal' => $subtotal,
                 'discount_amount' => $discountAmount,
+                'cart_discount_amount' => $cartDiscountAmount,
                 'shipping_cost' => $shippingCost,
                 'shipping_carrier' => $selectedShippingOption['carrier'] ?? null,
                 'shipping_service_name' => $selectedShippingOption['service_name'] ?? null,

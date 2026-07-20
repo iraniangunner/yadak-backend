@@ -37,6 +37,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProductReviewController;
 use App\Http\Controllers\ProductAttributeController;
 use App\Http\Controllers\AdminProductReviewController;
+use App\Http\Controllers\CartDiscountRuleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -374,4 +375,18 @@ Route::middleware(['auth:api', 'role:admin'])->group(function () {
     Route::get('/admin/reviews', [AdminProductReviewController::class, 'index']);
     Route::post('/admin/reviews/{review}/approve', [AdminProductReviewController::class, 'approve']);
     Route::post('/admin/reviews/{review}/reject', [AdminProductReviewController::class, 'reject']);
+});
+
+
+
+
+// عمومی - برای پیش‌نمایش توی تسویه‌حساب
+Route::get('/cart-discount-rules/active', [CartDiscountRuleController::class, 'activeRules']);
+
+// ادمین
+Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function () {
+    Route::get('/cart-discount-rules', [CartDiscountRuleController::class, 'index']);
+    Route::post('/cart-discount-rules', [CartDiscountRuleController::class, 'store']);
+    Route::post('/cart-discount-rules/{cartDiscountRule}', [CartDiscountRuleController::class, 'update']);
+    Route::delete('/cart-discount-rules/{cartDiscountRule}', [CartDiscountRuleController::class, 'destroy']);
 });
