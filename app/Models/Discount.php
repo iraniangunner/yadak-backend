@@ -5,12 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Discount extends Model
 {
-    use HasFactory;
-
     public const TYPE_PERCENTAGE = 'percentage';
     public const TYPE_FIXED = 'fixed';
 
@@ -28,8 +25,8 @@ class Discount extends Model
     {
         return [
             'value' => 'integer',
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
+            'starts_at' => 'date:Y-m-d',
+            'ends_at' => 'date:Y-m-d',
             'is_active' => 'boolean',
         ];
     }
