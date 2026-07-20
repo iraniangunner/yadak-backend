@@ -83,7 +83,7 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
-        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes']);
+        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes', 'priceTiers']);
 
         // چک اینکه آیا کاربر لاگین‌شده (اگه لاگین باشه) این محصول رو
         // علاقه‌مندی کرده یا نه - برای نمایش وضعیت اولیه‌ی دکمه‌ی قلب.

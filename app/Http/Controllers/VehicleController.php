@@ -12,21 +12,29 @@ class VehicleController extends Controller
      * لیست/جستجوی خودروها. برای صفحه‌ی «خودروی خودت رو انتخاب کن».
      * ?search=پژو برای جستجو روی brand یا model.
      */
-   public function index(Request $request)
-{
-    $vehicles = Vehicle::query()
-        ->when(!$request->boolean('with_inactive'), fn ($q) => $q->where('is_active', true))
-        ->when($request->filled('search'), function ($q) use ($request) {
-            $search = $request->string('search')->toString();
-            $q->where(function ($q) use ($search) {
-                $q->where('brand', 'like', "%{$search}%")
-                    ->orWhere('model', 'like', "%{$search}%");
-            });
-        })
-        ->paginate($request->integer('per_page', 20));
- 
-    return response()->json($vehicles);
-}
+    public function index(Request $request)
+    {
+        $vehicles = Vehicle::query()
+            ->where('is_active', true)
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = $request->string('search')->toString();
+                $q->where(function ($q) use ($search) {
+                    $q->where('brand', 'like', "%{$search}%")
+                        ->orWhere('model', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->filled('category_id'), function ($q) use ($request) {
+                $categoryIds = array_filter(explode(',', $request->string('category_id')->toString()));
+                $q->whereHas('products', function ($q) use ($categoryIds) {
+                    $q->whereIn('category_id', $categoryIds)->where('is_active', true);
+                });
+            })
+            ->orderBy('brand')
+            ->orderBy('model')
+            ->paginate($request->integer('per_page', 50));
+
+        return response()->json($vehicles);
+    }
 
     public function store(Request $request)
     {
