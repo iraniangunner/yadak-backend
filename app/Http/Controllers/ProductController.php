@@ -83,7 +83,7 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
-        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes', 'priceTiers']);
+        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes', 'priceTiers', 'complementaryProducts']);
 
         // چک اینکه آیا کاربر لاگین‌شده (اگه لاگین باشه) این محصول رو
         // علاقه‌مندی کرده یا نه - برای نمایش وضعیت اولیه‌ی دکمه‌ی قلب.
@@ -174,7 +174,7 @@ class ProductController extends Controller
             $slug = PersianSlug::make($validated['title']);
 
             if (Product::where('slug', $slug)->where('id', '!=', $product->id)->exists()) {
-                $slug .= '-' . Str::random(4);
+                $slug .= '-' . \Illuminate\Support\Str::random(4);
             }
 
             $validated['slug'] = $slug;
@@ -201,6 +201,11 @@ class ProductController extends Controller
 
         if ($request->has('vehicle_ids')) {
             $product->vehicles()->sync($request->input('vehicle_ids', []));
+        }
+
+        // ⚠️ جدید: sync کالاهای مکمل (اگه فرستاده شده باشه)
+        if ($request->has('complementary_product_ids')) {
+            $product->complementaryProducts()->sync($request->input('complementary_product_ids', []));
         }
 
         // ⚠️ جدید: اگه واقعاً از ناموجود به موجود تغییر کرده، مشترکینِ
@@ -241,6 +246,40 @@ class ProductController extends Controller
         $image->delete();
 
         return response()->json(['message' => 'عکس با موفقیت حذف شد.']);
+    }
+
+    /**
+     * پیشنهاد کالای مکمل - بند ۲.۳ سند: «امکان پیشنهاد کالای مکمل در
+     * صورتی که مشتری بخشی از اقلام مرتبط را انتخاب کرده باشد».
+     *
+     * ورودی: ?product_ids=1,2,3 (شناسه‌ی محصولاتی که الان توی سبد خریدن)
+     * خروجی: محصولاتی که مکملِ حداقل یکی از اون‌ها هستن، ولی خودشون
+     * از قبل توی سبد نیستن (چون اگه از قبل توی سبد باشن، دیگه نیازی به
+     * پیشنهادشون نیست - یعنی مشتری «بخشی» از اقلام مرتبط رو گرفته، نه
+     * همه‌شون رو).
+     */
+    public function complementarySuggestions(Request $request)
+    {
+        $cartProductIds = array_filter(explode(',', $request->string('product_ids')->toString()));
+
+        if (empty($cartProductIds)) {
+            return response()->json(['data' => []]);
+        }
+
+        $complementaryIds = \Illuminate\Support\Facades\DB::table('product_complementary')
+            ->whereIn('product_id', $cartProductIds)
+            ->pluck('complementary_product_id')
+            ->unique();
+
+        $suggestions = Product::query()
+            ->where('is_active', true)
+            ->whereIn('id', $complementaryIds)
+            ->whereNotIn('id', $cartProductIds) // خودِ اقلامی که از قبل توی سبدن پیشنهاد نشن
+            ->with(['brand:id,name,slug'])
+            ->limit(6)
+            ->get();
+
+        return response()->json(['data' => $suggestions]);
     }
 
     private function storeGalleryImages(Product $product, array $files): void
@@ -288,6 +327,7 @@ class ProductController extends Controller
             ->where('notified', false)
             ->update(['notified' => true]);
     }
+
     /**
      * @param  Product|null  $product  فقط موقع update پاس داده می‌شه؛ برای اینکه
      *                                 unique rule روی sku، خودِ رکورد فعلی رو نادیده بگیره.

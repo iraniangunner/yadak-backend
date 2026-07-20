@@ -321,4 +321,14 @@ class Product extends Model
     {
         return $this->reviews()->count();
     }
+
+    public function complementaryProducts():BelongsToMany
+    {
+        return $this->belongsToMany(
+            Product::class,
+            'product_complementary',
+            'product_id',
+            'complementary_product_id'
+        );
+    }
 }

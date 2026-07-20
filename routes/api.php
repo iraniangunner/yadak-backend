@@ -82,21 +82,15 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/vehicles', [VehicleController::class, 'index']);
 
 Route::get('/products', [ProductController::class, 'index']);
-// Route::get('/products/{product}', [ProductController::class, 'show']);
+Route::get('/products/complementary-suggestions', [ProductController::class, 'complementarySuggestions']);
 Route::get('/products/{product:slug}', [ProductController::class, 'show']);
 
-// ثبت علاقه‌مندی موجودی: هم مهمان هم کاربر لاگین‌شده می‌تونن استفاده کنن.
-// چون این route پشت auth:api نیست، $request->user() همیشه null برمی‌گرده،
-// یعنی فعلاً mobile همیشه الزامیه (حتی برای کاربر لاگین‌شده).
 Route::post('/products/{product}/stock-subscribe', [ProductStockSubscriptionController::class, 'store'])
     ->middleware('throttle:5,10');
 
 
 // عمومی - محاسبه‌ی قیمت بر اساس تعداد (برای سبد خرید فرانت)
 Route::get('/products/{product}/price-for-quantity', [ProductController::class, 'priceForQuantity']);
-
-
-
 
 
 Route::get('/articles', [ArticleController::class, 'index']);
@@ -182,6 +176,8 @@ Route::middleware(['auth:api', 'role:admin,warehouse'])->group(function () {
 */
 
 Route::get('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
+
+
 
 
 
