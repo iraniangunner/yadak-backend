@@ -15,6 +15,7 @@ class ProductAttributeController extends Controller
             'name' => 'required|string|max:100',
             'value' => 'required|string|max:255',
             'sort_order' => 'sometimes|integer|min:0',
+            'is_filterable' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -36,6 +37,7 @@ class ProductAttributeController extends Controller
             'name' => 'sometimes|string|max:100',
             'value' => 'sometimes|string|max:255',
             'sort_order' => 'sometimes|integer|min:0',
+            'is_filterable' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {

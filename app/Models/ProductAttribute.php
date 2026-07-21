@@ -9,7 +9,11 @@ class ProductAttribute extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['product_id', 'name', 'value', 'sort_order'];
+    protected $fillable = ['product_id', 'name', 'value', 'sort_order', 'is_filterable'];
+
+    protected $casts = [
+        'is_filterable' => 'boolean',
+    ];
 
     public function product()
     {

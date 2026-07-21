@@ -7,19 +7,24 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use App\Support\PersianSlug;
 
 class BrandController extends Controller
 {
-    public function __construct(private ImageService $imageService) {}
+    public function __construct(private ImageService $imageService)
+    {
+    }
 
     /**
      * لیست عمومی برندهای فعال (برای فیلتر توی صفحه‌ی محصولات).
+     *
+     * با ?category_id=1,2,3 فقط برندهایی برمی‌گردن که حداقل یه محصول
+     * فعال توی اون دسته(ها) دارن - برای صفحه‌ی /category/[slug] که فقط
+     * باید برندهای مرتبط با همون دسته رو توی فیلتر نشون بده.
      */
     public function index(Request $request)
     {
         $brands = Brand::query()
-            ->when(! $request->boolean('with_inactive'), fn($q) => $q->where('is_active', true))
+            ->when(! $request->boolean('with_inactive'), fn ($q) => $q->where('is_active', true))
             ->when($request->filled('category_id'), function ($q) use ($request) {
                 $categoryIds = array_filter(explode(',', $request->string('category_id')->toString()));
                 $q->whereHas('products', function ($q) use ($categoryIds) {
@@ -48,8 +53,7 @@ class BrandController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // $slug = Str::slug($request->name);
-        $slug = PersianSlug::make($request->name);
+        $slug = Str::slug($request->name);
 
         if (Brand::where('slug', $slug)->exists()) {
             $slug .= '-' . Str::random(4);
@@ -79,6 +83,7 @@ class BrandController extends Controller
             'name' => 'sometimes|string|max:255',
             'thumbnail' => 'nullable|image|max:2048',
             'is_active' => 'sometimes|boolean',
+            'sales_stopped' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -87,16 +92,6 @@ class BrandController extends Controller
 
         $data = $validator->validated();
         unset($data['thumbnail']);
-
-        if (array_key_exists('name', $data) && $data['name'] !== $brand->name) {
-            $slug = PersianSlug::make($data['name']);
-
-            if (Brand::where('slug', $slug)->where('id', '!=', $brand->id)->exists()) {
-                $slug .= '-' . \Illuminate\Support\Str::random(4);
-            }
-
-            $data['slug'] = $slug;
-        }
 
         if ($request->hasFile('thumbnail')) {
             $data['thumbnail'] = $this->imageService->replace(
@@ -110,6 +105,7 @@ class BrandController extends Controller
 
         return response()->json(['brand' => $brand->fresh()]);
     }
+
     /**
      * حذف برند (فقط ادمین). عکسش هم از دیسک پاک می‌شه.
      * توجه: محصولات مرتبط حذف نمی‌شن، فقط brand_id شون null می‌شه (nullOnDelete در migration).

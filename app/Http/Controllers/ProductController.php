@@ -51,6 +51,23 @@ class ProductController extends Controller
                         ->orWhere('sku', 'like', "%{$search}%");
                 });
             })
+            // فیلتر دینامیک بر اساس ویژگی‌های محصول - مثلاً attributes[جنس]=فلزی
+            // هر ویژگی انتخاب‌شده به‌صورت AND اعمال می‌شه (باید همه رو داشته باشه)
+            ->when($request->filled('attributes') && is_array($request->input('attributes')), function ($q) use ($request) {
+                foreach ($request->input('attributes') as $name => $value) {
+                    if ($value === '' || $value === null) {
+                        continue;
+                    }
+                    $q->whereHas('productAttributes', function ($q2) use ($name, $value) {
+                        $q2->where('name', $name)->where('value', $value)->where('is_filterable', true);
+                    });
+                }
+            })
+            // فیلتر بازه‌ی قیمت - روی قیمت پایه (price)، چون final_price یه
+            // مقدار محاسبه‌شده‌ی PHP ـه (بعد از منطق تخفیف چندسطحی)، نه یه
+            // ستون واقعی دیتابیس که بشه مستقیم توی SQL روش فیلتر کرد.
+            ->when($request->filled('min_price'), fn($q) => $q->where('price', '>=', $request->integer('min_price')))
+            ->when($request->filled('max_price'), fn($q) => $q->where('price', '<=', $request->integer('max_price')))
             // میانگین امتیاز به‌عنوان یه ستون واقعی SQL (reviews_avg_rating) -
             // چون فقط این‌جوری می‌شه هم فیلترش کرد هم مرتبش کرد.
             ->withAvg('reviews', 'rating')
@@ -280,6 +297,69 @@ class ProductController extends Controller
             ->get();
 
         return response()->json(['data' => $suggestions]);
+    }
+
+    /**
+     * ویژگی‌های قابل‌فیلتر یه دسته (و زیردسته‌هاش) - دقیقاً مثل دیجی‌کالا.
+     * علاوه بر category_id، بقیه‌ی فیلترهای فعال (برند/خودرو/قیمت/موجودی)
+     * رو هم در نظر می‌گیره - چون وقتی مثلاً یه برند خاص انتخاب می‌شه،
+     * ویژگی‌هایی که فقط مال محصولات اون برند نیستن نباید نشون داده بشن
+     * (فیلتر دینامیک/faceted، نه فقط بر اساس خودِ دسته).
+     *
+     * خروجی: [{name: "جنس", values: ["فلزی", "سرامیکی"]}, ...]
+     */
+    public function filterableAttributes(Request $request)
+    {
+        $categoryIds = array_filter(explode(',', $request->string('category_id')->toString()));
+
+        if (empty($categoryIds)) {
+            return response()->json(['data' => []]);
+        }
+
+        $attributes = \App\Models\ProductAttribute::query()
+            ->where('is_filterable', true)
+            ->whereHas('product', function ($q) use ($request, $categoryIds) {
+                $q->whereIn('category_id', $categoryIds)->where('is_active', true);
+
+                if ($request->filled('brand_id')) {
+                    $brandIds = array_filter(explode(',', $request->string('brand_id')->toString()));
+                    $q->whereIn('brand_id', $brandIds);
+                }
+                if ($request->filled('vehicle_id')) {
+                    $q->whereHas('vehicles', fn($q2) => $q2->where('vehicles.id', $request->integer('vehicle_id')));
+                }
+                if ($request->filled('stock_status')) {
+                    $statuses = array_filter(explode(',', $request->string('stock_status')->toString()));
+                    $q->whereIn('stock_status', $statuses);
+                }
+                if ($request->filled('min_price')) {
+                    $q->where('price', '>=', $request->integer('min_price'));
+                }
+                if ($request->filled('max_price')) {
+                    $q->where('price', '<=', $request->integer('max_price'));
+                }
+                // ویژگی‌های از قبل انتخاب‌شده هم اعمال می‌شن - تا لیست
+                // مقادیر باقی‌مونده‌ی ویژگی‌های دیگه بر همون اساس باشه
+                if ($request->filled('attributes') && is_array($request->input('attributes'))) {
+                    foreach ($request->input('attributes') as $name => $value) {
+                        if ($value === '' || $value === null) {
+                            continue;
+                        }
+                        $q->whereHas('productAttributes', function ($q2) use ($name, $value) {
+                            $q2->where('name', $name)->where('value', $value);
+                        });
+                    }
+                }
+            })
+            ->select('name', 'value')
+            ->distinct()
+            ->get()
+            ->groupBy('name')
+            ->map(fn($group) => $group->pluck('value')->unique()->values())
+            ->map(fn($values, $name) => ['name' => $name, 'values' => $values])
+            ->values();
+
+        return response()->json(['data' => $attributes]);
     }
 
     private function storeGalleryImages(Product $product, array $files): void

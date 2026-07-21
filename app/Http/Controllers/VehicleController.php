@@ -11,6 +11,9 @@ class VehicleController extends Controller
     /**
      * لیست/جستجوی خودروها. برای صفحه‌ی «خودروی خودت رو انتخاب کن».
      * ?search=پژو برای جستجو روی brand یا model.
+     * ?category_id=1,2,3 فقط خودروهایی برمی‌گردن که حداقل یه محصول فعال
+     * توی اون دسته(ها) دارن - برای صفحه‌ی /category/[slug] که فقط باید
+     * خودروهای مرتبط با همون دسته رو توی فیلتر نشون بده.
      */
     public function index(Request $request)
     {

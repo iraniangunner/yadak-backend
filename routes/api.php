@@ -83,6 +83,7 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/vehicles', [VehicleController::class, 'index']);
 
 Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/filterable-attributes', [ProductController::class, 'filterableAttributes']);
 Route::get('/products/complementary-suggestions', [ProductController::class, 'complementarySuggestions']);
 Route::get('/products/{product:slug}', [ProductController::class, 'show']);
 
