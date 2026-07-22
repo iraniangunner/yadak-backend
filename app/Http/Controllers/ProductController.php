@@ -22,15 +22,25 @@ class ProductController extends Controller
 
     /**
      * لیست عمومی محصولات با فیلتر. مهم‌ترین فیلتر طبق بند ۲.۳ سند:
-     * ?vehicle_id=X → فقط محصولاتی که به این خودرو تگ شدن.
+     * ?vehicle_brand=X&vehicle_model=Y → فقط محصولاتی که این برند/مدل خودرو رو دارن.
      * بقیه‌ی فیلترها: category_id, brand_id, stock_status, search (روی title/sku).
      */
     public function index(Request $request)
     {
         $products = Product::query()
             ->where('is_active', true)
-            ->when($request->filled('vehicle_id'), function ($q) use ($request) {
-                $q->whereHas('vehicles', fn($q) => $q->where('vehicles.id', $request->integer('vehicle_id')));
+            // ⚠️ جدید: به‌جای whereHas روی رابطه‌ی قدیمی vehicles، مستقیم
+            // روی ستون‌های vehicle_brand/vehicle_model خودِ محصول فیلتر
+            // می‌کنیم. هر دو مستقل از هم AND می‌شن - یعنی اگه برند و مدلی
+            // انتخاب بشه که واقعاً باهم روی هیچ محصولی نباشن، نتیجه خالی
+            // می‌مونه (رفتار طبیعی و درسته، نه باگ).
+            ->when($request->filled('vehicle_brand'), function ($q) use ($request) {
+                $brands = array_filter(explode(',', $request->string('vehicle_brand')->toString()));
+                $q->whereIn('vehicle_brand', $brands);
+            })
+            ->when($request->filled('vehicle_model'), function ($q) use ($request) {
+                $models = array_filter(explode(',', $request->string('vehicle_model')->toString()));
+                $q->whereIn('vehicle_model', $models);
             })
             ->when($request->filled('category_id'), function ($q) use ($request) {
                 $ids = array_filter(explode(',', $request->string('category_id')->toString()));
@@ -43,6 +53,13 @@ class ProductController extends Controller
             ->when($request->filled('stock_status'), function ($q) use ($request) {
                 $statuses = array_filter(explode(',', $request->string('stock_status')->toString()));
                 $q->whereIn('stock_status', $statuses);
+            })
+            // سوییچ «فقط کالاهای موجود» - میان‌بر سریع‌تر از تیک زدن stock_status
+            ->when($request->boolean('is_available'), fn($q) => $q->where('stock_status', 'available'))
+            // سوییچ «فقط کالاهای تخفیف‌دار» - یعنی قیمت قبل از تخفیف ثبت شده
+            // و واقعاً از قیمت فعلی بیشتره.
+            ->when($request->boolean('is_discounted'), function ($q) {
+                $q->whereNotNull('compare_price')->whereColumn('compare_price', '>', 'price');
             })
             ->when($request->filled('search'), function ($q) use ($request) {
                 $search = $request->string('search')->toString();
@@ -100,7 +117,7 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
-        $product->load(['images', 'vehicles', 'brand', 'category', 'productAttributes', 'priceTiers', 'complementaryProducts']);
+        $product->load(['images', 'brand', 'category', 'productAttributes', 'priceTiers', 'complementaryProducts']);
 
         // چک اینکه آیا کاربر لاگین‌شده (اگه لاگین باشه) این محصول رو
         // علاقه‌مندی کرده یا نه - برای نمایش وضعیت اولیه‌ی دکمه‌ی قلب.
@@ -170,16 +187,11 @@ class ProductController extends Controller
             $this->storeGalleryImages($product, $request->file('images'));
         }
 
-        if ($request->filled('vehicle_ids')) {
-            $product->vehicles()->sync($request->input('vehicle_ids'));
-        }
-
-        return response()->json(['product' => $product->fresh(['images', 'vehicles'])], 201);
+        return response()->json(['product' => $product->fresh(['images'])], 201);
     }
 
     /**
-     * ویرایش محصول. اگه vehicle_ids فرستاده بشه (حتی آرایه‌ی خالی)، لیست
-     * خودروهای مرتبط با sync جایگزین می‌شه (نه اضافه‌شدن به قبلی‌ها).
+     * ویرایش محصول.
      */
     public function update(Request $request, Product $product)
     {
@@ -216,10 +228,6 @@ class ProductController extends Controller
             $this->storeGalleryImages($product, $request->file('images'));
         }
 
-        if ($request->has('vehicle_ids')) {
-            $product->vehicles()->sync($request->input('vehicle_ids', []));
-        }
-
         // ⚠️ جدید: sync کالاهای مکمل (اگه فرستاده شده باشه)
         if ($request->has('complementary_product_ids')) {
             $product->complementaryProducts()->sync($request->input('complementary_product_ids', []));
@@ -231,7 +239,7 @@ class ProductController extends Controller
             $this->notifyStockSubscribers($product);
         }
 
-        return response()->json(['product' => $product->fresh(['images', 'vehicles'])]);
+        return response()->json(['product' => $product->fresh(['images'])]);
     }
     /**
      * حذف محصول همراه با پاک‌سازی فایل‌های فیزیکی thumbnail و گالری از دیسک.
@@ -263,6 +271,33 @@ class ProductController extends Controller
         $image->delete();
 
         return response()->json(['message' => 'عکس با موفقیت حذف شد.']);
+    }
+
+    /**
+     * برند/مدل‌های خودروی موجود - برای دو مصرف:
+     * ۱) دراپ‌داون فرم محصول توی پنل ادمین (بدون category_id - همه‌ی
+     *    مقادیر قبلاً واردشده‌ی کل محصولات)
+     * ۲) چک‌باکس‌های فیلتر توی صفحه‌ی دسته‌بندی (با category_id - فقط
+     *    مقادیری که واقعاً بین محصولات همون دسته وجود دارن)
+     */
+    public function vehicleFilterOptions(Request $request)
+    {
+        $query = Product::query()->where('is_active', true);
+
+        if ($request->filled('category_id')) {
+            $categoryIds = array_filter(explode(',', $request->string('category_id')->toString()));
+            $query->whereIn('category_id', $categoryIds);
+        }
+
+        if ($request->filled('brand_id')) {
+            $brandIds = array_filter(explode(',', $request->string('brand_id')->toString()));
+            $query->whereIn('brand_id', $brandIds);
+        }
+
+        $brands = (clone $query)->whereNotNull('vehicle_brand')->distinct()->pluck('vehicle_brand')->sort()->values();
+        $models = (clone $query)->whereNotNull('vehicle_model')->distinct()->pluck('vehicle_model')->sort()->values();
+
+        return response()->json(['brands' => $brands, 'models' => $models]);
     }
 
     /**
@@ -325,8 +360,13 @@ class ProductController extends Controller
                     $brandIds = array_filter(explode(',', $request->string('brand_id')->toString()));
                     $q->whereIn('brand_id', $brandIds);
                 }
-                if ($request->filled('vehicle_id')) {
-                    $q->whereHas('vehicles', fn($q2) => $q2->where('vehicles.id', $request->integer('vehicle_id')));
+                if ($request->filled('vehicle_brand')) {
+                    $brands = array_filter(explode(',', $request->string('vehicle_brand')->toString()));
+                    $q->whereIn('vehicle_brand', $brands);
+                }
+                if ($request->filled('vehicle_model')) {
+                    $models = array_filter(explode(',', $request->string('vehicle_model')->toString()));
+                    $q->whereIn('vehicle_model', $models);
                 }
                 if ($request->filled('stock_status')) {
                     $statuses = array_filter(explode(',', $request->string('stock_status')->toString()));
@@ -427,6 +467,9 @@ class ProductController extends Controller
             ],
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
+            'vehicle_brand' => 'nullable|string|max:100',
+            'vehicle_model' => 'nullable|string|max:100',
+            'vehicle_type' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'price' => "{$rule}|integer|min:0",
             'compare_price' => 'nullable|integer|min:0|gte:price',
@@ -437,8 +480,6 @@ class ProductController extends Controller
             'is_active' => 'sometimes|boolean',
             'thumbnail' => 'nullable|image|max:2048',
             'images.*' => 'nullable|image|max:2048',
-            'vehicle_ids' => 'nullable|array',
-            'vehicle_ids.*' => 'exists:vehicles,id',
         ], [
             'compare_price.gte' => 'قیمت قبل از تخفیف باید بزرگ‌تر یا مساوی قیمت فعلی باشد.',
         ]);
@@ -449,7 +490,7 @@ class ProductController extends Controller
 
         $data = $validator->validated();
 
-        unset($data['thumbnail'], $data['images'], $data['vehicle_ids']);
+        unset($data['thumbnail'], $data['images']);
 
         return $data;
     }

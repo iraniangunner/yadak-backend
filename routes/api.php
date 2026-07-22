@@ -78,15 +78,22 @@ Route::middleware(['auth:api', 'role:admin'])->group(function () {
 |--------------------------------------------------------------------------
 */
 
+
 Route::get('/brands', [BrandController::class, 'index']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/vehicles', [VehicleController::class, 'index']);
 
 Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/filterable-attributes', [ProductController::class, 'filterableAttributes']);
+Route::get('/products/vehicle-filter-options', [ProductController::class, 'vehicleFilterOptions']);
 Route::get('/products/complementary-suggestions', [ProductController::class, 'complementarySuggestions']);
+Route::get('/products/filterable-attributes', [ProductController::class, 'filterableAttributes']);
 Route::get('/products/{product:slug}', [ProductController::class, 'show']);
 
+// ثبت علاقه‌مندی موجودی: هم مهمان هم کاربر لاگین‌شده می‌تونن استفاده کنن.
+// چون این route پشت auth:api نیست، $request->user() همیشه null برمی‌گرده،
+// یعنی فعلاً mobile همیشه الزامیه (حتی برای کاربر لاگین‌شده). اگه بخوایم
+// کاربر لاگین‌شده نیازی به فرستادن mobile نداشته باشه، باید میدلور
+// "auth:api,optional" یا مشابهش اضافه بشه که فعلاً نداریم.
 Route::post('/products/{product}/stock-subscribe', [ProductStockSubscriptionController::class, 'store'])
     ->middleware('throttle:5,10');
 

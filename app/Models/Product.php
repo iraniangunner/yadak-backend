@@ -30,6 +30,9 @@ class Product extends Model
     protected $fillable = [
         'category_id',
         'brand_id',
+        'vehicle_brand',
+        'vehicle_model',
+        'vehicle_type',
         'title',
         'slug',
         'sku',
@@ -82,10 +85,10 @@ class Product extends Model
         return $this->belongsTo(Brand::class);
     }
 
-    public function vehicles(): BelongsToMany
-    {
-        return $this->belongsToMany(Vehicle::class, 'product_vehicle');
-    }
+    // public function vehicles(): BelongsToMany
+    // {
+    //     return $this->belongsToMany(Vehicle::class, 'product_vehicle');
+    // }
 
     public function stockSubscriptions(): HasMany
     {
@@ -322,7 +325,7 @@ class Product extends Model
         return $this->reviews()->count();
     }
 
-    public function complementaryProducts():BelongsToMany
+    public function complementaryProducts(): BelongsToMany
     {
         return $this->belongsToMany(
             Product::class,

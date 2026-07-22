@@ -11,32 +11,26 @@ use App\Support\PersianSlug;
 
 class CategoryController extends Controller
 {
-    public function __construct(private ImageService $imageService)
-    {
-    }
+    public function __construct(private ImageService $imageService) {}
 
-    /**
-     * لیست عمومی دسته‌بندی‌ها. با ?tree=1 به‌صورت درختی (فقط ریشه‌ها + children)
-     * برمی‌گرده، وگرنه لیست تخت با pagination.
-     */
     public function index(Request $request)
     {
-        if ($request->boolean('tree')) {
-            $categories = Category::with('children')
-                ->whereNull('parent_id')
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get();
+        $query = Category::query()
+            ->when(
+                ! $request->boolean('with_inactive'),
+                fn($q) => $q->where('is_active', true)
+            )
+            ->orderBy('sort_order');
 
-            return response()->json(['data' => $categories]);
-        }
+        // if ($request->filled('per_page')) {
+        //     return response()->json(
+        //         $query->paginate($request->integer('per_page'))
+        //     );
+        // }
 
-        $categories = Category::query()
-            ->when(! $request->boolean('with_inactive'), fn ($q) => $q->where('is_active', true))
-            ->orderBy('sort_order')
-            ->paginate($request->integer('per_page', 50));
-
-        return response()->json($categories);
+        return response()->json([
+            'data' => $query->get(),
+        ]);
     }
 
     public function store(Request $request)
